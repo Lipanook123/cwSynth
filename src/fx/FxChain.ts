@@ -1,4 +1,4 @@
-import { FxParams } from '../engine/Types';
+import type { FxParams } from '../engine/Types';
 
 export class FxChain {
   private ctx: AudioContext;

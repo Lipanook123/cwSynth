@@ -1,4 +1,4 @@
-import { OperatorParams, WaveType } from './Types';
+import type { OperatorParams, WaveType } from './Types';
 
 export class Operator {
   private ctx: AudioContext;

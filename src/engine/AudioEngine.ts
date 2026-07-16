@@ -1,6 +1,6 @@
 import { Voice } from './Voice';
 import { FxChain } from '../fx/FxChain';
-import { PatchParams, DEFAULT_PATCH } from './Types';
+import { type PatchParams, DEFAULT_PATCH } from './Types';
 import { Arpeggiator } from './Arpeggiator';
 
 const BASE_HZ = 440; // A4

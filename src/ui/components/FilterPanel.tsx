@@ -1,5 +1,5 @@
 import React from 'react';
-import { FilterParams, FilterType } from '../../engine/Types';
+import type { FilterParams, FilterType } from '../../engine/Types';
 import { Knob } from './Knob';
 
 const FILTER_TYPES: FilterType[] = ['lowpass','highpass','bandpass','notch'];

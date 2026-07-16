@@ -1,4 +1,4 @@
-import { PatchParams, DEFAULT_PATCH } from '../engine/Types';
+import { type PatchParams, DEFAULT_PATCH } from '../engine/Types';
 
 export interface PresetMeta {
   id: string;

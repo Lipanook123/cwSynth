@@ -1,7 +1,8 @@
 import { useState, useCallback, useEffect } from 'react';
 import { engine } from '../../engine/AudioEngine';
-import { PatchParams } from '../../engine/Types';
-import { presetManager, PresetMeta } from '../../presets/PresetManager';
+import type { PatchParams } from '../../engine/Types';
+import { presetManager } from '../../presets/PresetManager';
+import type { PresetMeta } from '../../presets/PresetManager';
 
 export function useEngine() {
   const [patch, setPatch] = useState<PatchParams>(engine.getPatch());

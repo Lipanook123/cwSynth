@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { PresetMeta, presetManager } from '../../presets/PresetManager';
+import { presetManager } from '../../presets/PresetManager';
+import type { PresetMeta } from '../../presets/PresetManager';
 
 interface Props {
   presets: PresetMeta[];

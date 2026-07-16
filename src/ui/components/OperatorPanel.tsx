@@ -1,8 +1,8 @@
 import React from 'react';
-import { OperatorParams, WaveType } from '../../engine/Types';
+import type { OperatorParams, WaveType } from '../../engine/Types';
 import { Knob } from './Knob';
 import { RandomControls } from './RandomControls';
-import { RandomMode } from '../../engine/Randomiser';
+import type { RandomMode } from '../../engine/Randomiser';
 
 const OP_COLORS = ['#4a9eff','#7b6fff','#ff6b9d','#ffaa4a','#4af0a0','#ff4a6b'];
 const WAVES: WaveType[] = ['sine','triangle','sawtooth','square'];

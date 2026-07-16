@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { RandomMode, generateSeed } from '../../engine/Randomiser';
+import { generateSeed } from '../../engine/Randomiser';
+import type { RandomMode } from '../../engine/Randomiser';
 
 interface Props {
   mode: RandomMode;

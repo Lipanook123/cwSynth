@@ -13,10 +13,11 @@ import { Scope } from './components/Scope';
 import { ALGORITHMS } from '../engine/Algorithms';
 import { Knob } from './components/Knob';
 import {
-  RandomMode, generateSeed,
+  generateSeed,
   randomPatch, randomiseOperators, randomiseAlgorithm,
   randomiseFilter, randomiseFx, randomiseArp,
 } from '../engine/Randomiser';
+import type { RandomMode } from '../engine/Randomiser';
 
 type Tab = 'operators' | 'algorithm' | 'filter' | 'fx' | 'arp' | 'presets';
 const TABS: { id: Tab; label: string }[] = [

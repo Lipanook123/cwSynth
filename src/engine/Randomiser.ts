@@ -1,6 +1,6 @@
 import {
-  PatchParams, OperatorParams, FilterParams, FxParams,
-  LfoParams, DEFAULT_PATCH, WaveType, FilterType, LfoShape,
+  type PatchParams, type OperatorParams, type FilterParams, type FxParams,
+  type LfoParams, DEFAULT_PATCH, type WaveType, type FilterType, type LfoShape,
 } from './Types';
 import { ALGORITHMS } from './Algorithms';
 

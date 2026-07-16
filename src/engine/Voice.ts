@@ -1,6 +1,6 @@
 import { Operator } from './Operator';
 import { ALGORITHMS } from './Algorithms';
-import { PatchParams, FilterParams } from './Types';
+import type { PatchParams, FilterParams } from './Types';
 
 export class Voice {
   private ctx: AudioContext;

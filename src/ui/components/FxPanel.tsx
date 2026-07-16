@@ -1,5 +1,5 @@
 import React from 'react';
-import { FxParams } from '../../engine/Types';
+import type { FxParams } from '../../engine/Types';
 import { Knob } from './Knob';
 
 interface Props { params: FxParams; onChange: (p: Partial<FxParams>) => void; }
