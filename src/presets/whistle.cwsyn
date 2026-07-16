@@ -1,0 +1,71 @@
+{
+  "name": "Whistle",
+  "author": "HEXA FM",
+  "tags": ["wind", "flute", "whistle", "organic"],
+  "version": 1,
+  "algorithm": 5,
+  "operators": [
+    {
+      "enabled": true, "wave": "sine", "wavetableData": null,
+      "ratio": 1, "fine": 2, "fixed": false, "fixedFreq": 440,
+      "level": 0.8, "feedback": 0.02,
+      "attack": 0.01, "decay": 0.15, "sustain": 0.8, "release": 0.1,
+      "karplusStrong": false, "ksDecay": 0.995
+    },
+    {
+      "enabled": true, "wave": "sine", "wavetableData": null,
+      "ratio": 1.99, "fine": 0, "fixed": false, "fixedFreq": 440,
+      "level": 0.8, "feedback": 0,
+      "attack": 0.002, "decay": 0.2, "sustain": 0.5, "release": 0.1,
+      "karplusStrong": false, "ksDecay": 0.995
+    },
+    {
+      "enabled": true, "wave": "sine", "wavetableData": null,
+      "ratio": 1, "fine": -2, "fixed": false, "fixedFreq": 440,
+      "level": 0.12, "feedback": 0,
+      "attack": 0.005, "decay": 0.06, "sustain": 0.12, "release": 0.04,
+      "karplusStrong": false, "ksDecay": 0.995
+    },
+    {
+      "enabled": false, "wave": "sine", "wavetableData": null,
+      "ratio": 1, "fine": 0, "fixed": false, "fixedFreq": 440,
+      "level": 0.5, "feedback": 0,
+      "attack": 0.01, "decay": 0.3, "sustain": 0.5, "release": 0.3,
+      "karplusStrong": false, "ksDecay": 0.995
+    },
+    {
+      "enabled": false, "wave": "sine", "wavetableData": null,
+      "ratio": 1, "fine": 0, "fixed": false, "fixedFreq": 440,
+      "level": 0.5, "feedback": 0,
+      "attack": 0.01, "decay": 0.3, "sustain": 0.5, "release": 0.3,
+      "karplusStrong": false, "ksDecay": 0.995
+    },
+    {
+      "enabled": false, "wave": "sine", "wavetableData": null,
+      "ratio": 1, "fine": 0, "fixed": false, "fixedFreq": 440,
+      "level": 0.5, "feedback": 0,
+      "attack": 0.01, "decay": 0.3, "sustain": 0.5, "release": 0.3,
+      "karplusStrong": false, "ksDecay": 0.995
+    }
+  ],
+  "filter": {
+    "enabled": false, "type": "lowpass", "cutoff": 4000, "resonance": 1,
+    "envAmount": 0.5, "attack": 0.01, "decay": 0.3, "sustain": 0, "release": 0.2,
+    "keytrack": 0.5
+  },
+  "lfo1": { "shape": "sine", "rate": 6, "depth": 0.07, "delay": 0.25, "sync": true },
+  "lfo2": { "shape": "sine", "rate": 0.3, "depth": 0.02, "delay": 0, "sync": false },
+  "modMatrix": [
+    { "source": "lfo1", "dest": "pitch", "amount": 0.3, "enabled": true }
+  ],
+  "fx": {
+    "reverb": { "enabled": true,  "size": 0.4, "damp": 0.6, "mix": 0.15 },
+    "delay":  { "enabled": false, "time": 0.3, "feedback": 0.3, "mix": 0.2, "sync": false },
+    "chorus": { "enabled": false, "rate": 0.5, "depth": 0.3, "mix": 0.4 },
+    "dist":   { "enabled": false, "drive": 2, "tone": 0.5, "mix": 0.5, "mode": "soft" },
+    "eq":     { "enabled": true,  "low": -3, "mid": 2, "high": 1, "midFreq": 3000 }
+  },
+  "pitchBend": 2,
+  "transpose": 0,
+  "volume": 0.65
+}

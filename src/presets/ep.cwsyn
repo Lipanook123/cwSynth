@@ -1,0 +1,27 @@
+{
+  "name": "E. Piano",
+  "author": "HEXA FM",
+  "tags": ["keys", "warm", "piano"],
+  "version": 1,
+  "algorithm": 5,
+  "operators": [
+    { "enabled": true, "wave": "sine", "wavetableData": null, "ratio": 1, "fine": 0, "fixed": false, "fixedFreq": 440, "level": 1.0, "feedback": 0, "attack": 0.001, "decay": 0.8, "sustain": 0.0, "release": 0.5, "karplusStrong": false, "ksDecay": 0.995 },
+    { "enabled": true, "wave": "sine", "wavetableData": null, "ratio": 14, "fine": 0, "fixed": false, "fixedFreq": 440, "level": 0.6, "feedback": 0, "attack": 0.001, "decay": 0.4, "sustain": 0.0, "release": 0.3, "karplusStrong": false, "ksDecay": 0.995 },
+    { "enabled": true, "wave": "sine", "wavetableData": null, "ratio": 1, "fine": 0, "fixed": false, "fixedFreq": 440, "level": 0.8, "feedback": 0, "attack": 0.001, "decay": 1.2, "sustain": 0.0, "release": 0.6, "karplusStrong": false, "ksDecay": 0.995 },
+    { "enabled": true, "wave": "sine", "wavetableData": null, "ratio": 14, "fine": 0, "fixed": false, "fixedFreq": 440, "level": 0.5, "feedback": 0, "attack": 0.001, "decay": 0.6, "sustain": 0.0, "release": 0.3, "karplusStrong": false, "ksDecay": 0.995 },
+    { "enabled": false, "wave": "sine", "wavetableData": null, "ratio": 1, "fine": 0, "fixed": false, "fixedFreq": 440, "level": 0.5, "feedback": 0, "attack": 0.01, "decay": 0.3, "sustain": 0.5, "release": 0.3, "karplusStrong": false, "ksDecay": 0.995 },
+    { "enabled": false, "wave": "sine", "wavetableData": null, "ratio": 1, "fine": 0, "fixed": false, "fixedFreq": 440, "level": 0.5, "feedback": 0, "attack": 0.01, "decay": 0.3, "sustain": 0.5, "release": 0.3, "karplusStrong": false, "ksDecay": 0.995 }
+  ],
+  "filter": { "enabled": false, "type": "lowpass", "cutoff": 4000, "resonance": 1, "envAmount": 0.5, "attack": 0.01, "decay": 0.3, "sustain": 0, "release": 0.2, "keytrack": 0.5 },
+  "lfo1": { "shape": "sine", "rate": 5, "depth": 0.02, "delay": 0.5, "sync": true },
+  "lfo2": { "shape": "sine", "rate": 0.3, "depth": 0.01, "delay": 0, "sync": false },
+  "modMatrix": [],
+  "fx": {
+    "reverb": { "enabled": true,  "size": 0.5, "damp": 0.5, "mix": 0.2 },
+    "delay":  { "enabled": false, "time": 0.375, "feedback": 0.4, "mix": 0.2, "sync": false },
+    "chorus": { "enabled": true,  "rate": 0.4, "depth": 0.2, "mix": 0.3 },
+    "dist":   { "enabled": false, "drive": 2, "tone": 0.5, "mix": 0.5, "mode": "soft" },
+    "eq":     { "enabled": false, "low": 0, "mid": 0, "high": 0, "midFreq": 1000 }
+  },
+  "pitchBend": 2, "transpose": 0, "volume": 0.75
+}

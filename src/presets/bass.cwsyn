@@ -1,0 +1,27 @@
+{
+  "name": "Synth Bass",
+  "author": "HEXA FM",
+  "tags": ["bass", "punchy", "synth"],
+  "version": 1,
+  "algorithm": 1,
+  "operators": [
+    { "enabled": true, "wave": "sine", "wavetableData": null, "ratio": 1, "fine": 0, "fixed": false, "fixedFreq": 440, "level": 1.0, "feedback": 0.15, "attack": 0.001, "decay": 0.3, "sustain": 0.6, "release": 0.15, "karplusStrong": false, "ksDecay": 0.995 },
+    { "enabled": true, "wave": "sine", "wavetableData": null, "ratio": 1, "fine": 0, "fixed": false, "fixedFreq": 440, "level": 0.9, "feedback": 0, "attack": 0.001, "decay": 0.15, "sustain": 0.3, "release": 0.1, "karplusStrong": false, "ksDecay": 0.995 },
+    { "enabled": true, "wave": "sine", "wavetableData": null, "ratio": 2, "fine": 0, "fixed": false, "fixedFreq": 440, "level": 0.5, "feedback": 0, "attack": 0.001, "decay": 0.1, "sustain": 0.0, "release": 0.1, "karplusStrong": false, "ksDecay": 0.995 },
+    { "enabled": false, "wave": "sine", "wavetableData": null, "ratio": 1, "fine": 0, "fixed": false, "fixedFreq": 440, "level": 0.5, "feedback": 0, "attack": 0.01, "decay": 0.3, "sustain": 0.5, "release": 0.3, "karplusStrong": false, "ksDecay": 0.995 },
+    { "enabled": false, "wave": "sine", "wavetableData": null, "ratio": 1, "fine": 0, "fixed": false, "fixedFreq": 440, "level": 0.5, "feedback": 0, "attack": 0.01, "decay": 0.3, "sustain": 0.5, "release": 0.3, "karplusStrong": false, "ksDecay": 0.995 },
+    { "enabled": false, "wave": "sine", "wavetableData": null, "ratio": 1, "fine": 0, "fixed": false, "fixedFreq": 440, "level": 0.5, "feedback": 0, "attack": 0.01, "decay": 0.3, "sustain": 0.5, "release": 0.3, "karplusStrong": false, "ksDecay": 0.995 }
+  ],
+  "filter": { "enabled": true, "type": "lowpass", "cutoff": 800, "resonance": 4, "envAmount": 0.6, "attack": 0.005, "decay": 0.25, "sustain": 0.1, "release": 0.2, "keytrack": 0.3 },
+  "lfo1": { "shape": "sine", "rate": 5, "depth": 0.1, "delay": 0.3, "sync": true },
+  "lfo2": { "shape": "sine", "rate": 0.3, "depth": 0.01, "delay": 0, "sync": false },
+  "modMatrix": [],
+  "fx": {
+    "reverb": { "enabled": false, "size": 0.3, "damp": 0.7, "mix": 0.1 },
+    "delay":  { "enabled": false, "time": 0.375, "feedback": 0.3, "mix": 0.15, "sync": false },
+    "chorus": { "enabled": false, "rate": 0.5, "depth": 0.3, "mix": 0.4 },
+    "dist":   { "enabled": true,  "drive": 1.5, "tone": 0.4, "mix": 0.3, "mode": "soft" },
+    "eq":     { "enabled": true,  "low": 3, "mid": -2, "high": -1, "midFreq": 500 }
+  },
+  "pitchBend": 2, "transpose": 0, "volume": 0.8
+}

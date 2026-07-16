@@ -1,0 +1,176 @@
+{
+  "name": "909 Snare",
+  "author": "CW Synth",
+  "tags": ["drum", "snare", "909", "percussion"],
+  "version": 1,
+  "algorithm": 5,
+  "operators": [
+    {
+      "enabled": true,
+      "wave": "sine",
+      "wavetableData": null,
+      "ratio": 0.5,
+      "fine": 0,
+      "fixed": true,
+      "fixedFreq": 185,
+      "level": 0.9,
+      "feedback": 0.08,
+      "attack": 0.001,
+      "decay": 0.12,
+      "sustain": 0.0,
+      "release": 0.08,
+      "karplusStrong": false,
+      "ksDecay": 0.995
+    },
+    {
+      "enabled": true,
+      "wave": "sine",
+      "wavetableData": null,
+      "ratio": 1.0,
+      "fine": 0,
+      "fixed": true,
+      "fixedFreq": 330,
+      "level": 0.75,
+      "feedback": 0.0,
+      "attack": 0.001,
+      "decay": 0.04,
+      "sustain": 0.0,
+      "release": 0.03,
+      "karplusStrong": false,
+      "ksDecay": 0.995
+    },
+    {
+      "enabled": true,
+      "wave": "square",
+      "wavetableData": null,
+      "ratio": 1.0,
+      "fine": 0,
+      "fixed": true,
+      "fixedFreq": 220,
+      "level": 0.55,
+      "feedback": 0.0,
+      "attack": 0.001,
+      "decay": 0.18,
+      "sustain": 0.0,
+      "release": 0.12,
+      "karplusStrong": true,
+      "ksDecay": 0.92
+    },
+    {
+      "enabled": true,
+      "wave": "sine",
+      "wavetableData": null,
+      "ratio": 0.5,
+      "fine": 14,
+      "fixed": true,
+      "fixedFreq": 175,
+      "level": 0.6,
+      "feedback": 0.04,
+      "attack": 0.001,
+      "decay": 0.09,
+      "sustain": 0.0,
+      "release": 0.06,
+      "karplusStrong": false,
+      "ksDecay": 0.995
+    },
+    {
+      "enabled": false,
+      "wave": "sine",
+      "wavetableData": null,
+      "ratio": 1,
+      "fine": 0,
+      "fixed": false,
+      "fixedFreq": 440,
+      "level": 0.5,
+      "feedback": 0,
+      "attack": 0.01,
+      "decay": 0.3,
+      "sustain": 0.5,
+      "release": 0.3,
+      "karplusStrong": false,
+      "ksDecay": 0.995
+    },
+    {
+      "enabled": false,
+      "wave": "sine",
+      "wavetableData": null,
+      "ratio": 1,
+      "fine": 0,
+      "fixed": false,
+      "fixedFreq": 440,
+      "level": 0.5,
+      "feedback": 0,
+      "attack": 0.01,
+      "decay": 0.3,
+      "sustain": 0.5,
+      "release": 0.3,
+      "karplusStrong": false,
+      "ksDecay": 0.995
+    }
+  ],
+  "filter": {
+    "enabled": true,
+    "type": "highpass",
+    "cutoff": 120,
+    "resonance": 1.8,
+    "envAmount": 0.0,
+    "attack": 0.001,
+    "decay": 0.1,
+    "sustain": 0.0,
+    "release": 0.1,
+    "keytrack": 0.0
+  },
+  "lfo1": {
+    "shape": "sine",
+    "rate": 5,
+    "depth": 0.0,
+    "delay": 0.0,
+    "sync": true
+  },
+  "lfo2": {
+    "shape": "sine",
+    "rate": 0.3,
+    "depth": 0.0,
+    "delay": 0.0,
+    "sync": false
+  },
+  "modMatrix": [],
+  "fx": {
+    "reverb": {
+      "enabled": false,
+      "size": 0.2,
+      "damp": 0.8,
+      "mix": 0.08
+    },
+    "delay": {
+      "enabled": false,
+      "time": 0.375,
+      "feedback": 0.2,
+      "mix": 0.15,
+      "sync": false
+    },
+    "chorus": {
+      "enabled": false,
+      "rate": 0.5,
+      "depth": 0.2,
+      "mix": 0.0
+    },
+    "dist": {
+      "enabled": true,
+      "drive": 2.8,
+      "tone": 0.65,
+      "mix": 0.55,
+      "mode": "soft"
+    },
+    "eq": {
+      "enabled": true,
+      "low": -6,
+      "mid": 3,
+      "high": 4,
+      "midFreq": 3500
+    }
+  },
+  "pitchBend": 2,
+  "transpose": 0,
+  "volume": 0.82
+}
