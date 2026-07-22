@@ -6,7 +6,7 @@ import type { PresetMeta } from '../../presets/PresetManager';
 
 export function useEngine() {
   const [patch, setPatch] = useState<PatchParams>(engine.getPatch());
-  const [presets] = useState<PresetMeta[]>(presetManager.all());
+  const [presets, setPresets] = useState<PresetMeta[]>(presetManager.all());
 
   useEffect(() => {
     engine.setOnStateChange(() => setPatch({ ...engine.getPatch() }));
@@ -24,12 +24,19 @@ export function useEngine() {
   }, []);
 
   const savePreset = useCallback((name: string, tags: string[]) => {
-    return presetManager.save(name, engine.getPatch(), tags);
+    const meta = presetManager.save(name, engine.getPatch(), tags);
+    setPresets(presetManager.all());
+    return meta;
   }, []);
 
-  const exportPatch = useCallback(() => {
-    presetManager.exportFile(engine.getPatch(), patch.name);
-  }, [patch.name]);
+  const deletePreset = useCallback((id: string) => {
+    presetManager.delete(id);
+    setPresets(presetManager.all());
+  }, []);
+
+  const exportPatch = useCallback((name: string) => {
+    presetManager.exportFile(engine.getPatch(), name);
+  }, []);
 
   const importPatch = useCallback(async (file: File) => {
     const p = await presetManager.importFile(file);
@@ -37,5 +44,5 @@ export function useEngine() {
     setPatch({ ...engine.getPatch() });
   }, []);
 
-  return { patch, updatePatch, presets, loadPreset, savePreset, exportPatch, importPatch };
+  return { patch, updatePatch, presets, loadPreset, savePreset, deletePreset, exportPatch, importPatch };
 }

@@ -48,7 +48,7 @@ export default function App() {
   const [rMode, setRMode]   = useState<RandomMode>('safe');
   const [rSeed, setRSeed]   = useState<string>(String(generateSeed()));
 
-  const { patch, updatePatch, presets, loadPreset, savePreset, exportPatch, importPatch } = useEngine();
+  const { patch, updatePatch, presets, loadPreset, savePreset, deletePreset, exportPatch, importPatch } = useEngine();
   useKeyboard();
 
   useEffect(() => {
@@ -205,7 +205,7 @@ export default function App() {
         {tab === 'presets' && (
           <PresetBrowser
             presets={presets} currentName={patch.name}
-            onLoad={loadPreset} onSave={savePreset}
+            onLoad={loadPreset} onSave={savePreset} onDelete={deletePreset}
             onExport={exportPatch} onImport={importPatch}
           />
         )}

@@ -1,5 +1,4 @@
 import React, { useState, useRef } from 'react';
-import { presetManager } from '../../presets/PresetManager';
 import type { PresetMeta } from '../../presets/PresetManager';
 
 interface Props {
@@ -7,14 +6,17 @@ interface Props {
   currentName: string;
   onLoad: (m: PresetMeta) => void;
   onSave: (name: string, tags: string[]) => void;
-  onExport: () => void;
+  onDelete: (id: string) => void;
+  onExport: (name: string) => void;
   onImport: (f: File) => void;
 }
 
-export const PresetBrowser: React.FC<Props> = ({ presets, currentName, onLoad, onSave, onExport, onImport }) => {
+export const PresetBrowser: React.FC<Props> = ({ presets, currentName, onLoad, onSave, onDelete, onExport, onImport }) => {
   const [search, setSearch] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveName, setSaveName] = useState('');
+  const [exporting, setExporting] = useState(false);
+  const [exportName, setExportName] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
 
   const filtered = presets.filter(p =>
@@ -47,7 +49,7 @@ export const PresetBrowser: React.FC<Props> = ({ presets, currentName, onLoad, o
           <div style={{ display:'flex', flexDirection:'column', gap:3 }}>
             {user.map(p => (
               <PresetRow key={p.id} meta={p} active={p.name===currentName} onLoad={() => onLoad(p)}
-                onDelete={() => { presetManager.delete(p.id); window.location.reload(); }} />
+                onDelete={() => onDelete(p.id)} />
             ))}
           </div>
         </div>
@@ -65,10 +67,20 @@ export const PresetBrowser: React.FC<Props> = ({ presets, currentName, onLoad, o
             <Btn onClick={() => { onSave(saveName,[]); setSaving(false); setSaveName(''); }} color="var(--acc)">save</Btn>
             <Btn onClick={() => setSaving(false)}>cancel</Btn>
           </div>
+        ) : exporting ? (
+          <div style={{ display:'flex', gap:6 }}>
+            <input value={exportName} onChange={e => setExportName(e.target.value)}
+              placeholder="filename…" autoFocus
+              style={{ flex:1, background:'var(--surf)', border:'1px solid var(--acc)', borderRadius:4,
+                padding:'6px 8px', color:'var(--fg)', fontFamily:'IBM Plex Mono', fontSize:11, outline:'none' }}
+              onKeyDown={e => { if (e.key==='Enter') { onExport(exportName); setExporting(false); } if (e.key==='Escape') setExporting(false); }}/>
+            <Btn onClick={() => { onExport(exportName); setExporting(false); }} color="var(--acc)">export</Btn>
+            <Btn onClick={() => setExporting(false)}>cancel</Btn>
+          </div>
         ) : (
           <div style={{ display:'flex', gap:6 }}>
             <Btn onClick={() => { setSaveName(currentName); setSaving(true); }} color="var(--acc)">save patch</Btn>
-            <Btn onClick={onExport}>export .cwsyn</Btn>
+            <Btn onClick={() => { setExportName(currentName); setExporting(true); }}>export .cwsyn</Btn>
           </div>
         )}
         <input ref={fileRef} type="file" accept=".cwsyn,.json" style={{ display:'none' }}
