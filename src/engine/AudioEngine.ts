@@ -16,6 +16,7 @@ export class AudioEngine {
   public arp: Arpeggiator;
   private patch: PatchParams = { ...DEFAULT_PATCH };
   private onStateChange?: () => void;
+  private noteListeners = new Set<() => void>();
 
   constructor() {
     // Arp is created immediately so UI can configure it before the first gesture
@@ -85,6 +86,7 @@ export class AudioEngine {
     voice.output.connect(this.fx.input);
     voice.noteOn(velocity, this.ctx.currentTime);
     this.voices.set(semitone, voice);
+    this.noteListeners.forEach(fn => fn());
     this.onStateChange?.();
   }
 
@@ -96,6 +98,7 @@ export class AudioEngine {
     voice.noteOff(this.ctx.currentTime);
     voice.recordNoteOff(this.ctx.currentTime);
     this.voices.delete(semitone);
+    this.noteListeners.forEach(fn => fn());
     const maxRel = Math.max(...this.patch.operators.map(o => o.release)) + 0.5;
     setTimeout(() => voice.dispose(), maxRel * 1000);
     this.onStateChange?.();
@@ -128,9 +131,17 @@ export class AudioEngine {
 
   getPatch(): PatchParams { return this.patch; }
 
+  getActiveNotes(): ReadonlySet<number> { return new Set(this.voices.keys()); }
+
   getAnalyser(): AnalyserNode | null { return this.analyser ?? null; }
 
   setOnStateChange(cb: () => void) { this.onStateChange = cb; }
+
+  /** Subscribe to voice add/remove. Returns an unsubscribe function. */
+  addNoteListener(cb: () => void): () => void {
+    this.noteListeners.add(cb);
+    return () => this.noteListeners.delete(cb);
+  }
 
   dispose() {
     this.allNotesOff();

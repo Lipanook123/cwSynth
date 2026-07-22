@@ -166,7 +166,7 @@ export class Arpeggiator {
       logger.log(`arp tick: step=${this.step} semi=${semi} delay=${delay.toFixed(0)}ms`);
 
       setTimeout(() => { if (this.running) this.noteOn(semi); }, delay);
-      setTimeout(() => { if (this.running) this.noteOff(semi); }, offDelay);
+      setTimeout(() => { this.noteOff(semi); }, offDelay); // always fire to avoid stuck notes
 
       this.step = (this.step + 1) % seq.length;
       this.nextTime += stepDur;
