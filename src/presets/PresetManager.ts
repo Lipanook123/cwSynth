@@ -99,7 +99,7 @@ export class PresetManager {
   delete(id: string) { this.userPresets = this.userPresets.filter(p => p.id !== id); this._saveToStorage(); }
 
   exportFile(patch: PatchParams, name: string) {
-    const blob = new Blob([JSON.stringify(patch, null, 2)], { type:'application/json' });
+    const blob = new Blob([JSON.stringify(patch, null, 2)], { type:'application/octet-stream' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = `${name.replace(/\s+/g,'_')}.cwsyn`;
