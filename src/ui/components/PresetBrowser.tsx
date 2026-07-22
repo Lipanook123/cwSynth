@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { presetManager } from '../../presets/PresetManager';
 import type { PresetMeta } from '../../presets/PresetManager';
 
@@ -15,6 +15,7 @@ export const PresetBrowser: React.FC<Props> = ({ presets, currentName, onLoad, o
   const [search, setSearch] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveName, setSaveName] = useState('');
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const filtered = presets.filter(p =>
     p.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -70,11 +71,9 @@ export const PresetBrowser: React.FC<Props> = ({ presets, currentName, onLoad, o
             <Btn onClick={onExport}>export .cwsyn</Btn>
           </div>
         )}
-        <label style={{ cursor:'pointer' }}>
-          <input type="file" accept=".cwsyn,.json" style={{ display:'none' }}
-            onChange={e => { const f = e.target.files?.[0]; if (f) onImport(f); }}/>
-          <Btn as="span" onClick={() => {}}>import .cwsyn</Btn>
-        </label>
+        <input ref={fileRef} type="file" accept=".cwsyn,.json" style={{ display:'none' }}
+          onChange={e => { const f = e.target.files?.[0]; if (f) { onImport(f); e.target.value = ''; } }}/>
+        <Btn onClick={() => fileRef.current?.click()}>import .cwsyn</Btn>
       </div>
     </div>
   );
