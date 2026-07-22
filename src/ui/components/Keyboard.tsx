@@ -1,4 +1,4 @@
-import React, { useRef, useCallback } from 'react';
+import React, { useRef, useCallback, useState, useEffect } from 'react';
 import { engine } from '../../engine/AudioEngine';
 
 const OCTAVES = 3;
@@ -44,6 +44,11 @@ export const Keyboard: React.FC = () => {
   const held        = useRef(new Set<number>());
   const touchMap    = useRef(new Map<number, number>());
   const lastTouch   = useRef(new Map<number, number>()); // semi → timestamp of last touchStart
+  const [activeNotes, setActiveNotes] = useState<ReadonlySet<number>>(new Set());
+
+  useEffect(() => {
+    return engine.addNoteListener(() => setActiveNotes(engine.getActiveNotes()));
+  }, []);
 
   const on  = useCallback((semi: number) => { if (held.current.has(semi)) return; held.current.add(semi); engine.noteOn(semi); }, []);
   const off = useCallback((semi: number) => { held.current.delete(semi); engine.noteOff(semi); }, []);
@@ -63,6 +68,7 @@ export const Keyboard: React.FC = () => {
             <div
               key={k.semi}
               data-semi={k.semi}
+              className={activeNotes.has(k.semi) ? 'key-active' : undefined}
               onMouseDown={e => {
                 // Suppress synthetic mouse events fired by the browser after touchEnd
                 if (Date.now() - (lastTouch.current.get(k.semi) ?? 0) < 500) return;
@@ -99,13 +105,15 @@ export const Keyboard: React.FC = () => {
                 cursor: 'pointer',
                 userSelect: 'none',
                 WebkitTapHighlightColor: 'transparent',
-                background: k.isSharp
-                  ? 'linear-gradient(180deg, #0e1018 0%, #0a0c14 100%)'
-                  : 'linear-gradient(180deg, #1a1e2c 0%, #131621 100%)',
-                border: k.isSharp
-                  ? '1px solid #0c0e16'
-                  : '1px solid #232840',
-                transition: 'background .04s',
+                background: activeNotes.has(k.semi)
+                  ? k.isSharp ? 'var(--acc)' : 'var(--acc)99'
+                  : k.isSharp
+                    ? 'linear-gradient(180deg, #0e1018 0%, #0a0c14 100%)'
+                    : 'linear-gradient(180deg, #1a1e2c 0%, #131621 100%)',
+                border: activeNotes.has(k.semi)
+                  ? '1px solid var(--acc)'
+                  : k.isSharp ? '1px solid #0c0e16' : '1px solid #232840',
+                transition: 'background .06s, border-color .06s',
               }}
             >
               {!k.isSharp && (
