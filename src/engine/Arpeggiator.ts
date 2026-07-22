@@ -10,7 +10,7 @@ const TICK_MS   = 25;    // ms
 export class Arpeggiator {
   public enabled = false;
   public pattern: ArpPattern = 'up';
-  public holdMode: HoldMode  = 'hold';
+  public holdMode: HoldMode  = 'latch';
   public rate    = 8;      // steps/sec
   public gate    = 0.6;    // fraction of step
   public octaves = 1;

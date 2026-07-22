@@ -12,9 +12,18 @@ export class AudioEngine {
   private analyser!: AnalyserNode;
   private fx!: FxChain;
   private voices = new Map<number, Voice>(); // semitone → voice
-  public arp!: Arpeggiator;
+  public arp: Arpeggiator;
   private patch: PatchParams = { ...DEFAULT_PATCH };
   private onStateChange?: () => void;
+
+  constructor() {
+    // Arp is created immediately so UI can configure it before the first gesture
+    this.arp = new Arpeggiator(
+      (semi) => this._noteOn(semi, 0.8),
+      (semi) => this._noteOff(semi),
+      () => this.ctx?.currentTime ?? 0,
+    );
+  }
 
   // Lazy init — AudioContext only created on first user gesture
   private _init() {
@@ -29,12 +38,6 @@ export class AudioEngine {
     this.fx.output.connect(this.masterGain);
     this.masterGain.connect(this.analyser);
     this.analyser.connect(this.ctx.destination);
-
-    this.arp = new Arpeggiator(
-      (semi) => this._noteOn(semi, 0.8),
-      (semi) => this._noteOff(semi),
-      () => this.ctx!.currentTime
-    );
   }
 
   resume() {

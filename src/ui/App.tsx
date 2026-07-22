@@ -40,7 +40,7 @@ export default function App() {
     () => (localStorage.getItem('cw_theme') as 'dark'|'light') ?? 'dark'
   );
   const [arpState, setArpState] = useState<ArpState>({
-    enabled: false, pattern: 'up', holdMode: 'hold', rate: 8, gate: 0.6, octaves: 1,
+    enabled: false, pattern: 'up', holdMode: 'latch', rate: 8, gate: 0.6, octaves: 1,
   });
 
   // Randomiser state — shared across topbar + tabs
