@@ -141,8 +141,34 @@ html, body, #root {
   gap: 10px;
 }
 
+/* ── Algorithm grid ──────────────────────────────────────── */
+.algo-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 3px;
+}
+
+/* ── Mobile first ────────────────────────────────────────── */
 @media (max-width: 480px) {
-  .op-grid { grid-template-columns: 1fr 1fr; }
+  /* Single-column operator panels — gives full width for knobs */
+  .op-grid { grid-template-columns: 1fr; }
+
+  /* 4-column algorithm picker (was 8) */
+  .algo-grid { grid-template-columns: repeat(4, 1fr); }
+
+  /* Hide scope and global randomise from topbar — per-tab strip covers randomise */
+  .topbar-scope { display: none; }
+  .topbar-rand  { display: none; }
+
+  /* Slightly taller tap targets on tab bar */
+  .tab-btn { padding: 10px 14px; }
+
+  /* Legible knob labels and values */
+  .knob-label { font-size: 10px !important; }
+  .knob-val   { font-size: 11px !important; }
+
+  /* Tighter content padding on narrow screens */
+  .content { padding: 10px; }
 }
 
 /* ── Theme toggle ─────────────────────────────────────────── */

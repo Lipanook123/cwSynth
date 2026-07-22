@@ -1,4 +1,4 @@
-import React, { useRef, useCallback } from 'react';
+import React, { useRef, useCallback, useState } from 'react';
 
 interface KnobProps {
   value: number;
@@ -16,6 +16,8 @@ export const Knob: React.FC<KnobProps> = ({
   value, min, max, step = 0.001, label, display, onChange, color = 'var(--acc)', size = 44,
 }) => {
   const dragRef = useRef<{ startY: number; startVal: number } | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [editVal, setEditVal] = useState('');
 
   const norm = (v: number) => (v - min) / (max - min);
   const angle = -135 + norm(value) * 270;
@@ -24,7 +26,14 @@ export const Knob: React.FC<KnobProps> = ({
   const clamp = (v: number) => Math.max(min, Math.min(max, v));
   const snap  = (v: number) => step ? Math.round(v / step) * step : v;
 
+  const commitEdit = useCallback(() => {
+    const v = parseFloat(editVal);
+    if (!isNaN(v)) onChange(clamp(snap(v)));
+    setEditing(false);
+  }, [editVal, min, max, onChange, snap]);
+
   const onMouseDown = useCallback((e: React.MouseEvent) => {
+    if (editing) return;
     e.preventDefault();
     dragRef.current = { startY: e.clientY, startVal: value };
     const onMove = (me: MouseEvent) => {
@@ -39,7 +48,7 @@ export const Knob: React.FC<KnobProps> = ({
     };
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
-  }, [value, min, max, onChange, snap]);
+  }, [value, min, max, onChange, snap, editing]);
 
   const onWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
@@ -48,9 +57,26 @@ export const Knob: React.FC<KnobProps> = ({
   }, [value, min, max, onChange, snap]);
 
   const onDblClick = useCallback(() => {
-    const v = parseFloat(prompt(`${label} (${min}–${max})`, String(value)) ?? '');
-    if (!isNaN(v)) onChange(clamp(snap(v)));
-  }, [value, min, max, label, onChange, snap]);
+    setEditVal(String(value));
+    setEditing(true);
+  }, [value]);
+
+  const onTouchStart = useCallback((e: React.TouchEvent) => {
+    if (editing) return;
+    e.preventDefault();
+    dragRef.current = { startY: e.touches[0].clientY, startVal: value };
+  }, [value, editing]);
+
+  const onTouchMove = useCallback((e: React.TouchEvent) => {
+    e.preventDefault();
+    if (!dragRef.current) return;
+    const delta = (dragRef.current.startY - e.touches[0].clientY) / 200;
+    onChange(clamp(snap(dragRef.current.startVal + delta * (max - min))));
+  }, [min, max, onChange, snap]);
+
+  const onTouchEnd = useCallback(() => {
+    dragRef.current = null;
+  }, []);
 
   const r = size / 2 - 4;
   const cx = size / 2, cy = size / 2;
@@ -62,13 +88,16 @@ export const Knob: React.FC<KnobProps> = ({
   const large = Math.abs(angle - (-135)) > 180 ? 1 : 0;
 
   return (
-    <div className="knob-wrap" style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:3, userSelect:'none' }}>
+    <div className="knob-wrap" style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:3, userSelect:'none', position:'relative' }}>
       <svg
         width={size} height={size}
         onMouseDown={onMouseDown}
         onWheel={onWheel}
         onDoubleClick={onDblClick}
-        style={{ cursor:'ns-resize', flexShrink:0 }}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+        style={{ cursor:'ns-resize', flexShrink:0, touchAction:'none' }}
       >
         {/* Track */}
         <path
@@ -92,8 +121,28 @@ export const Knob: React.FC<KnobProps> = ({
         {/* Centre dot */}
         <circle cx={cx} cy={cy} r={3} fill="var(--surf2)" />
       </svg>
-      <span style={{ fontSize:9, color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.06em', whiteSpace:'nowrap' }}>{label}</span>
-      <span style={{ fontSize:10, color, fontWeight:600, fontFamily:'IBM Plex Mono' }}>{fmt}</span>
+      <span className="knob-label" style={{ fontSize:9, color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.06em', whiteSpace:'nowrap' }}>{label}</span>
+      {editing ? (
+        <input
+          autoFocus
+          inputMode="decimal"
+          value={editVal}
+          onChange={e => setEditVal(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === 'Enter') commitEdit();
+            if (e.key === 'Escape') setEditing(false);
+          }}
+          onBlur={commitEdit}
+          style={{
+            width: Math.max(size, 52), background:'var(--surf2)',
+            border:`1px solid ${color}`, borderRadius:3,
+            padding:'2px 4px', color, fontFamily:'IBM Plex Mono',
+            fontSize:10, fontWeight:600, textAlign:'center', outline:'none',
+          }}
+        />
+      ) : (
+        <span className="knob-val" style={{ fontSize:10, color, fontWeight:600, fontFamily:'IBM Plex Mono' }}>{fmt}</span>
+      )}
     </div>
   );
 };

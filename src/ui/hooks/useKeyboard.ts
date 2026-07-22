@@ -42,7 +42,8 @@ export function useKeyboard() {
     navigator.requestMIDIAccess().then(access => {
       inputs = access.inputs;
       const handleMidi = (e: MIDIMessageEvent) => {
-        const [status, note, velocity] = e.data;
+        if (!e.data) return;
+        const [status, note, velocity] = Array.from(e.data);
         const type = status & 0xf0;
         if (type === 0x90 && velocity > 0) engine.noteOn(note, velocity / 127);
         else if (type === 0x80 || (type === 0x90 && velocity === 0)) engine.noteOff(note);

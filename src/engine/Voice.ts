@@ -8,7 +8,6 @@ export class Voice {
   private operators: Operator[];
   private filter: BiquadFilterNode;
   private filterEnvGain: GainNode;
-  private filterActive = false;
   private driveNode: WaveShaperNode;
   private driveGain: GainNode;
   private dryGain: GainNode;
@@ -51,7 +50,7 @@ export class Voice {
 
     // Disconnect previous
     this.operators.forEach(op => op.disconnectOutput());
-    this.freqConnections.forEach(([, tgt]) => {
+    this.freqConnections.forEach((_conn) => {
       // disconnected implicitly when output is disconnected
     });
     this.freqConnections = [];

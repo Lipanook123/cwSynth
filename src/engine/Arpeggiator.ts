@@ -23,14 +23,15 @@ export class Arpeggiator {
   private nextTime = 0;
   private tickID: ReturnType<typeof setTimeout> | null = null;
 
-  // Scheduled note-ons: { semitone, offAt } so we can cancel
-  private scheduled: Array<{ semitone: number; offAt: number }> = [];
+  private noteOn:  NoteFn;
+  private noteOff: NoteFn;
+  private getTime: TimeFn;
 
-  constructor(
-    private noteOn:  NoteFn,
-    private noteOff: NoteFn,
-    private getTime: TimeFn,
-  ) {}
+  constructor(noteOn: NoteFn, noteOff: NoteFn, getTime: TimeFn) {
+    this.noteOn  = noteOn;
+    this.noteOff = noteOff;
+    this.getTime = getTime;
+  }
 
   addNote(semitone: number) {
     if (this.holdMode === 'latch') {

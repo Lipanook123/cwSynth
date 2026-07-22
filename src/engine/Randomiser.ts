@@ -179,7 +179,7 @@ export function randomPatch(seed: string | number, mode: RandomMode): PatchParam
 
 // ── Per-section randomisers (operate on existing patch) ───────────────────
 export function randomiseOperators(
-  patch: PatchParams, seed: string | number, mode: RandomMode
+  _patch: PatchParams, seed: string | number, mode: RandomMode
 ): Partial<PatchParams> {
   return {
     operators: Array.from({ length: 6 }, (_, i) =>
