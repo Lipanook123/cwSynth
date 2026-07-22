@@ -118,16 +118,20 @@ export default function App() {
           </span>
         </div>
 
-        <Scope />
+        <div className="topbar-scope" style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+          <Scope />
+        </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
           {/* Global randomise */}
-          <RandomControls
-            mode={rMode} seed={rSeed}
-            onModeChange={setRMode} onSeedChange={setRSeed}
-            onRandomise={handleGlobalRandom}
-            label="patch"
-          />
+          <div className="topbar-rand">
+            <RandomControls
+              mode={rMode} seed={rSeed}
+              onModeChange={setRMode} onSeedChange={setRSeed}
+              onRandomise={handleGlobalRandom}
+              label="patch"
+            />
+          </div>
           <Knob value={patch.volume} min={0} max={1} step={0.01}
             label="vol" display={v => Math.round(v * 100) + '%'} color="var(--acc)"
             onChange={v => updatePatch({ volume: v })} size={36} />

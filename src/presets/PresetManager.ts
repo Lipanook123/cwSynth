@@ -8,11 +8,6 @@ export interface PresetMeta {
   patch: PatchParams;
 }
 
-const parsePatch = (raw: string): PatchParams => {
-  try { return { ...DEFAULT_PATCH, ...JSON.parse(raw) }; }
-  catch { return DEFAULT_PATCH; }
-};
-
 // Inline factory presets to avoid asset import issues
 const WHISTLE_PATCH: PatchParams = {
   ...DEFAULT_PATCH,

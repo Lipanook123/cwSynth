@@ -78,7 +78,7 @@ export const AlgorithmView: React.FC<Props> = ({ value, onChange }) => {
       </div>
 
       {/* Grid of all algorithms */}
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(8,1fr)', gap:3 }}>
+      <div className="algo-grid">
         {ALGORITHMS.map(a => (
           <button key={a.id} onClick={() => onChange(a.id)}
             style={{

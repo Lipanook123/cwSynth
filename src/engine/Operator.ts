@@ -1,4 +1,4 @@
-import type { OperatorParams, WaveType } from './Types';
+import type { OperatorParams } from './Types';
 
 export class Operator {
   private ctx: AudioContext;
@@ -17,9 +17,7 @@ export class Operator {
   private ksFeedback: GainNode | null = null;
 
   private params: OperatorParams;
-  private noteHz = 440;
   private active = false;
-  private noteOffTime = 0;
 
   constructor(ctx: AudioContext, params: OperatorParams) {
     this.ctx = ctx;
@@ -73,7 +71,6 @@ export class Operator {
 
   noteOn(hz: number, velocity: number, startTime: number) {
     this.noteOff(startTime, true);
-    this.noteHz = hz;
     this.active = true;
     const t = startTime;
     const p = this.params;
@@ -111,7 +108,6 @@ export class Operator {
   noteOff(time: number, immediate = false) {
     if (!this.active && !immediate) return;
     this.active = false;
-    this.noteOffTime = time;
     const p = this.params;
     const rel = immediate ? 0.003 : p.release;
 

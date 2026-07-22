@@ -38,11 +38,8 @@ export class FxChain {
   private eqMid: BiquadFilterNode;
   private eqHigh: BiquadFilterNode;
 
-  private params: FxParams;
-
   constructor(ctx: AudioContext, params: FxParams) {
     this.ctx = ctx;
-    this.params = params;
 
     this.input  = ctx.createGain();
     this.output = ctx.createGain();
@@ -138,7 +135,6 @@ export class FxChain {
   }
 
   update(params: FxParams) {
-    this.params = params;
     const t = this.ctx.currentTime;
     const { reverb, delay, chorus, dist, eq } = params;
 

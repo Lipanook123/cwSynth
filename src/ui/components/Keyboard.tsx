@@ -33,7 +33,6 @@ function buildPositions() {
     const li = NAT.findIndex(n => n.semi > k.semi) - 1;
     if (li < 0) continue;
     const lx = pos[NAT[li].semi].x;
-    const rx = li + 1 < NAT.length ? pos[NAT[li+1].semi].x : lx + NW + GAP;
     pos[k.semi] = { x: lx + NW + GAP / 2 - SW / 2, w: SW, h: SH, z: 2 };
   }
   return { pos, totalW: (NAT.length) * (NW + GAP) };
@@ -48,11 +47,6 @@ export const Keyboard: React.FC = () => {
   const on  = useCallback((semi: number) => { if (held.current.has(semi)) return; held.current.add(semi); engine.noteOn(semi); }, []);
   const off = useCallback((semi: number) => { held.current.delete(semi); engine.noteOff(semi); }, []);
 
-  const semiAt = (e: MouseEvent | Touch): number | null => {
-    const el = document.elementFromPoint(e instanceof Touch ? e.clientX : e.clientX, e instanceof Touch ? e.clientY : e.clientY);
-    const s = (el as HTMLElement)?.dataset?.semi;
-    return s != null ? parseInt(s) : null;
-  };
 
   return (
     <div style={{
