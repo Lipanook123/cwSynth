@@ -1,6 +1,7 @@
 import React from 'react';
 import { engine } from '../../engine/AudioEngine';
 import { Knob } from './Knob';
+import { logger } from '../../debug/Logger';
 
 type ArpPattern = 'up' | 'down' | 'updown' | 'random';
 type HoldMode   = 'hold' | 'latch';
@@ -38,6 +39,7 @@ export const ArpPanel: React.FC<Props> = ({ state, onChange }) => {
     if (partial.octaves  !== undefined) arp.setOctaves(partial.octaves);
     if (partial.enabled  !== undefined) {
       arp.enabled = partial.enabled;
+      logger.info(`arp enabled=${partial.enabled} holdMode=${arp.holdMode} pattern=${arp.pattern}`);
       if (!partial.enabled) arp.stop();
     }
   };

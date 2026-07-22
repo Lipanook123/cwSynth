@@ -1,3 +1,5 @@
+import { logger } from '../debug/Logger';
+
 type NoteFn = (semitone: number) => void;
 type TimeFn = () => number;
 
@@ -35,41 +37,64 @@ export class Arpeggiator {
 
   addNote(semitone: number) {
     if (this.holdMode === 'latch') {
-      if (this.latchNotes.has(semitone)) { this.latchNotes.delete(semitone); }
-      else { this.latchNotes.add(semitone); }
+      if (this.latchNotes.has(semitone)) {
+        this.latchNotes.delete(semitone);
+        logger.log(`arp latch: removed semi=${semitone}, latch=[${[...this.latchNotes]}]`);
+      } else {
+        this.latchNotes.add(semitone);
+        logger.log(`arp latch: added semi=${semitone}, latch=[${[...this.latchNotes]}]`);
+      }
       this._buildSeq([...this.latchNotes]);
     } else {
       this.heldNotes.add(semitone);
+      logger.log(`arp hold: addNote semi=${semitone}, held=[${[...this.heldNotes]}]`);
       this._buildSeq([...this.heldNotes]);
     }
+    logger.log(`arp seq=[${this.seq}] running=${this.running}`);
     if (this.seq.length && !this.running) this._start();
   }
 
   removeNote(semitone: number) {
     if (this.holdMode === 'hold') {
       this.heldNotes.delete(semitone);
+      logger.log(`arp hold: removeNote semi=${semitone}, held=[${[...this.heldNotes]}]`);
       this._buildSeq([...this.heldNotes]);
-      if (!this.seq.length) this._stop();
+      if (!this.seq.length) {
+        logger.log('arp hold: no notes left, stopping');
+        this._stop();
+      }
     }
   }
 
   stop() {
+    logger.log('arp stop() called');
     this._stop();
     this.heldNotes.clear();
     this.latchNotes.clear();
     this.seq = [];
   }
 
-  setPattern(p: ArpPattern) { this.pattern = p; this._buildSeq([...(this.holdMode === 'latch' ? this.latchNotes : this.heldNotes)]); }
-  setHoldMode(m: HoldMode) { this.holdMode = m; this.stop(); }
-  setRate(r: number) { this.rate = r; }
-  setGate(g: number) { this.gate = g; }
-  setOctaves(o: number) { this.octaves = o; this._buildSeq([...(this.holdMode === 'latch' ? this.latchNotes : this.heldNotes)]); }
+  setPattern(p: ArpPattern) {
+    logger.log(`arp setPattern=${p}`);
+    this.pattern = p;
+    this._buildSeq([...(this.holdMode === 'latch' ? this.latchNotes : this.heldNotes)]);
+  }
+  setHoldMode(m: HoldMode) {
+    logger.log(`arp setHoldMode=${m}`);
+    this.holdMode = m;
+    this.stop();
+  }
+  setRate(r: number)    { this.rate = r; }
+  setGate(g: number)    { this.gate = g; }
+  setOctaves(o: number) {
+    this.octaves = o;
+    this._buildSeq([...(this.holdMode === 'latch' ? this.latchNotes : this.heldNotes)]);
+  }
 
   private _buildSeq(notes: number[]) {
     if (!notes.length) { this.seq = []; return; }
     const base = [...notes].sort((a, b) => a - b);
-    let expanded: number[] = [];
+    const expanded: number[] = [];
     for (let o = 0; o < this.octaves; o++) base.forEach(n => expanded.push(n + o * 12));
 
     switch (this.pattern) {
@@ -81,9 +106,11 @@ export class Arpeggiator {
       case 'random': this.seq = expanded; break;
     }
     if (this.step >= this.seq.length) this.step = 0;
+    logger.log(`arp _buildSeq: pattern=${this.pattern} seq=[${this.seq}]`);
   }
 
   private _start() {
+    logger.info(`arp _start: rate=${this.rate} gate=${this.gate} octaves=${this.octaves} seq=[${this.seq}] time=${this.getTime().toFixed(3)}`);
     this.running = true;
     this.step = 0;
     this.nextTime = this.getTime() + 0.05;
@@ -91,6 +118,7 @@ export class Arpeggiator {
   }
 
   private _stop() {
+    logger.log(`arp _stop: was running=${this.running}`);
     this.running = false;
     if (this.tickID) { clearTimeout(this.tickID); this.tickID = null; }
   }
@@ -107,11 +135,12 @@ export class Arpeggiator {
         : this.seq;
       const semi = seq[this.step % seq.length];
 
-      // Schedule via callbacks (engine handles actual audio timing)
-      const onAt  = this.nextTime;
-      const offAt = this.nextTime + stepDur * this.gate;
-      const delay = Math.max(0, (onAt - now) * 1000);
+      const onAt    = this.nextTime;
+      const offAt   = this.nextTime + stepDur * this.gate;
+      const delay    = Math.max(0, (onAt  - now) * 1000);
       const offDelay = Math.max(0, (offAt - now) * 1000);
+
+      logger.log(`arp tick: step=${this.step} semi=${semi} delay=${delay.toFixed(0)}ms`);
 
       setTimeout(() => { if (this.running) this.noteOn(semi); }, delay);
       setTimeout(() => { if (this.running) this.noteOff(semi); }, offDelay);
