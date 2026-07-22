@@ -10,6 +10,7 @@ import { PresetBrowser } from './components/PresetBrowser';
 import { RandomControls } from './components/RandomControls';
 import { Keyboard } from './components/Keyboard';
 import { Scope } from './components/Scope';
+import { LogViewer } from './components/LogViewer';
 import { ALGORITHMS } from '../engine/Algorithms';
 import { Knob } from './components/Knob';
 import {
@@ -212,6 +213,9 @@ export default function App() {
 
       {/* ── Keyboard ──────────────────────────────────────────────────────── */}
       <Keyboard />
+
+      {/* ── Debug log viewer ─────────────────────────────────────────────── */}
+      <LogViewer />
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { Voice } from './Voice';
 import { FxChain } from '../fx/FxChain';
 import { type PatchParams, DEFAULT_PATCH } from './Types';
 import { Arpeggiator } from './Arpeggiator';
+import { logger } from '../debug/Logger';
 
 const BASE_HZ = 440; // A4
 const BASE_SEMITONE = 69;
@@ -23,12 +24,15 @@ export class AudioEngine {
       (semi) => this._noteOff(semi),
       () => this.ctx?.currentTime ?? 0,
     );
+    logger.info('AudioEngine constructed, arp ready');
   }
 
   // Lazy init — AudioContext only created on first user gesture
   private _init() {
     if (this.ctx) return;
     this.ctx = new AudioContext();
+    logger.info(`AudioContext created, state=${this.ctx.state}, sampleRate=${this.ctx.sampleRate}`);
+
     this.masterGain = this.ctx.createGain();
     this.masterGain.gain.value = this.patch.volume;
     this.analyser = this.ctx.createAnalyser();
@@ -42,12 +46,16 @@ export class AudioEngine {
 
   resume() {
     this._init();
-    if (this.ctx?.state === 'suspended') this.ctx.resume();
+    if (this.ctx?.state === 'suspended') {
+      logger.warn('AudioContext suspended — resuming');
+      this.ctx.resume().then(() => logger.info('AudioContext resumed'));
+    }
   }
 
   noteOn(semitone: number, velocity = 0.8) {
     this.resume();
-    if (this.arp?.enabled) {
+    logger.log(`noteOn semi=${semitone} vel=${velocity.toFixed(2)} arp.enabled=${this.arp.enabled} ctx=${this.ctx?.state ?? 'null'}`);
+    if (this.arp.enabled) {
       this.arp.addNote(semitone);
     } else {
       this._noteOn(semitone, velocity);
@@ -55,7 +63,8 @@ export class AudioEngine {
   }
 
   noteOff(semitone: number) {
-    if (this.arp?.enabled) {
+    logger.log(`noteOff semi=${semitone} arp.enabled=${this.arp.enabled}`);
+    if (this.arp.enabled) {
       this.arp.removeNote(semitone);
     } else {
       this._noteOff(semitone);
@@ -63,8 +72,7 @@ export class AudioEngine {
   }
 
   _noteOn(semitone: number, velocity: number) {
-    if (!this.ctx) return;
-    // Kill existing voice on same semitone
+    if (!this.ctx) { logger.error('_noteOn: no AudioContext'); return; }
     if (this.voices.has(semitone)) {
       const old = this.voices.get(semitone)!;
       old.noteOff(this.ctx.currentTime);
@@ -72,6 +80,7 @@ export class AudioEngine {
     }
 
     const hz = BASE_HZ * Math.pow(2, (semitone + this.patch.transpose - BASE_SEMITONE) / 12);
+    logger.log(`_noteOn semi=${semitone} hz=${hz.toFixed(1)}`);
     const voice = new Voice(this.ctx, this.patch, semitone, hz);
     voice.output.connect(this.fx.input);
     voice.noteOn(velocity, this.ctx.currentTime);
@@ -82,7 +91,8 @@ export class AudioEngine {
   _noteOff(semitone: number) {
     if (!this.ctx) return;
     const voice = this.voices.get(semitone);
-    if (!voice) return;
+    if (!voice) { logger.warn(`_noteOff: no voice for semi=${semitone}`); return; }
+    logger.log(`_noteOff semi=${semitone}`);
     voice.noteOff(this.ctx.currentTime);
     voice.recordNoteOff(this.ctx.currentTime);
     this.voices.delete(semitone);
@@ -99,6 +109,7 @@ export class AudioEngine {
   }
 
   loadPatch(patch: PatchParams) {
+    logger.info(`loadPatch: ${patch.name}`);
     this.allNotesOff();
     this.patch = { ...patch };
     this._init();
