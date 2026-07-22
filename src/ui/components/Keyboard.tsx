@@ -41,8 +41,9 @@ function buildPositions() {
 const { pos, totalW } = buildPositions();
 
 export const Keyboard: React.FC = () => {
-  const held = useRef(new Set<number>());
-  const touchMap = useRef(new Map<number, number>());
+  const held        = useRef(new Set<number>());
+  const touchMap    = useRef(new Map<number, number>());
+  const lastTouch   = useRef(new Map<number, number>()); // semi → timestamp of last touchStart
 
   const on  = useCallback((semi: number) => { if (held.current.has(semi)) return; held.current.add(semi); engine.noteOn(semi); }, []);
   const off = useCallback((semi: number) => { held.current.delete(semi); engine.noteOff(semi); }, []);
@@ -62,12 +63,34 @@ export const Keyboard: React.FC = () => {
             <div
               key={k.semi}
               data-semi={k.semi}
-              onMouseDown={e => { e.preventDefault(); on(k.semi); }}
+              onMouseDown={e => {
+                // Suppress synthetic mouse events fired by the browser after touchEnd
+                if (Date.now() - (lastTouch.current.get(k.semi) ?? 0) < 500) return;
+                e.preventDefault(); on(k.semi);
+              }}
               onMouseEnter={e => { if (e.buttons === 1) on(k.semi); }}
               onMouseUp={() => off(k.semi)}
               onMouseLeave={() => off(k.semi)}
-              onTouchStart={e => { e.preventDefault(); Array.from(e.changedTouches).forEach(t => { const s = k.semi; touchMap.current.set(t.identifier, s); on(s); }); }}
-              onTouchEnd={e => { Array.from(e.changedTouches).forEach(t => { const s = touchMap.current.get(t.identifier); if (s != null) { off(s); touchMap.current.delete(t.identifier); } }); }}
+              onTouchStart={e => {
+                e.preventDefault();
+                Array.from(e.changedTouches).forEach(t => {
+                  lastTouch.current.set(k.semi, Date.now());
+                  touchMap.current.set(t.identifier, k.semi);
+                  on(k.semi);
+                });
+              }}
+              onTouchEnd={e => {
+                Array.from(e.changedTouches).forEach(t => {
+                  const s = touchMap.current.get(t.identifier);
+                  if (s != null) { off(s); touchMap.current.delete(t.identifier); }
+                });
+              }}
+              onTouchCancel={e => {
+                Array.from(e.changedTouches).forEach(t => {
+                  const s = touchMap.current.get(t.identifier);
+                  if (s != null) { off(s); touchMap.current.delete(t.identifier); }
+                });
+              }}
               style={{
                 position: 'absolute',
                 left: p.x, top: 0, width: p.w, height: p.h,

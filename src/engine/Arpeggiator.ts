@@ -17,10 +17,11 @@ export class Arpeggiator {
   public gate    = 0.6;    // fraction of step
   public octaves = 1;
 
-  private heldNotes  = new Set<number>();
-  private latchNotes = new Set<number>();
+  private heldNotes   = new Set<number>();
+  private latchNotes  = new Set<number>();
+  private latchTimes  = new Map<number, number>(); // semitone → Date.now() when latched ON
   private seq: number[] = [];
-  private step   = 0;
+  private step    = 0;
   private running = false;
   private nextTime = 0;
   private tickID: ReturnType<typeof setTimeout> | null = null;
@@ -38,10 +39,19 @@ export class Arpeggiator {
   addNote(semitone: number) {
     if (this.holdMode === 'latch') {
       if (this.latchNotes.has(semitone)) {
+        // Debounce: ignore de-latch if note was just latched ON within 150ms
+        // (suppresses ghost mousedown/touchstart fired by Android after touchend)
+        const age = Date.now() - (this.latchTimes.get(semitone) ?? 0);
+        if (age < 150) {
+          logger.log(`arp latch: ignoring ghost de-latch for semi=${semitone} (age=${age}ms)`);
+          return;
+        }
         this.latchNotes.delete(semitone);
+        this.latchTimes.delete(semitone);
         logger.log(`arp latch: removed semi=${semitone}, latch=[${[...this.latchNotes]}]`);
       } else {
         this.latchNotes.add(semitone);
+        this.latchTimes.set(semitone, Date.now());
         logger.log(`arp latch: added semi=${semitone}, latch=[${[...this.latchNotes]}]`);
       }
       this._buildSeq([...this.latchNotes]);
@@ -50,8 +60,20 @@ export class Arpeggiator {
       logger.log(`arp hold: addNote semi=${semitone}, held=[${[...this.heldNotes]}]`);
       this._buildSeq([...this.heldNotes]);
     }
+
     logger.log(`arp seq=[${this.seq}] running=${this.running}`);
-    if (this.seq.length && !this.running) this._start();
+
+    if (!this.seq.length) {
+      // No notes — stop the ticker so nextTime doesn't lag behind
+      if (this.running) this._stop();
+    } else if (!this.running) {
+      this._start();
+    } else {
+      // Already running: reset nextTime to avoid a burst of catch-up ticks
+      // that would fire if nextTime drifted behind real time while seq was empty
+      this.nextTime = this.getTime() + 0.05;
+      logger.log(`arp timing reset: nextTime=${this.nextTime.toFixed(3)}`);
+    }
   }
 
   removeNote(semitone: number) {
@@ -71,6 +93,7 @@ export class Arpeggiator {
     this._stop();
     this.heldNotes.clear();
     this.latchNotes.clear();
+    this.latchTimes.clear();
     this.seq = [];
   }
 
