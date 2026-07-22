@@ -15,6 +15,7 @@ export const PresetBrowser: React.FC<Props> = ({ presets, currentName, onLoad, o
   const [search, setSearch] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveName, setSaveName] = useState('');
+  const [saveTags, setSaveTags] = useState('');
   const [exporting, setExporting] = useState(false);
   const [exportName, setExportName] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
@@ -57,17 +58,31 @@ export const PresetBrowser: React.FC<Props> = ({ presets, currentName, onLoad, o
 
       {/* Save / export / import */}
       <div style={{ borderTop:'1px solid var(--bord)', paddingTop:10, display:'flex', flexDirection:'column', gap:6 }}>
-        {saving ? (
-          <div style={{ display:'flex', gap:6 }}>
-            <input value={saveName} onChange={e => setSaveName(e.target.value)}
-              placeholder="patch name…" autoFocus
-              style={{ flex:1, background:'var(--surf)', border:'1px solid var(--acc)', borderRadius:4,
-                padding:'6px 8px', color:'var(--fg)', fontFamily:'IBM Plex Mono', fontSize:11, outline:'none' }}
-              onKeyDown={e => { if (e.key==='Enter') { onSave(saveName,[]); setSaving(false); setSaveName(''); } if (e.key==='Escape') setSaving(false); }}/>
-            <Btn onClick={() => { onSave(saveName,[]); setSaving(false); setSaveName(''); }} color="var(--acc)">save</Btn>
-            <Btn onClick={() => setSaving(false)}>cancel</Btn>
-          </div>
-        ) : exporting ? (
+        {saving ? (() => {
+          const doSave = () => {
+            const tags = saveTags.split(',').map(t => t.trim()).filter(Boolean);
+            onSave(saveName, tags);
+            setSaving(false); setSaveName(''); setSaveTags('');
+          };
+          return (
+            <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
+              <input value={saveName} onChange={e => setSaveName(e.target.value)}
+                placeholder="patch name…" autoFocus
+                style={{ background:'var(--surf)', border:'1px solid var(--acc)', borderRadius:4,
+                  padding:'6px 8px', color:'var(--fg)', fontFamily:'IBM Plex Mono', fontSize:11, outline:'none' }}
+                onKeyDown={e => { if (e.key==='Enter') doSave(); if (e.key==='Escape') { setSaving(false); setSaveTags(''); } }}/>
+              <input value={saveTags} onChange={e => setSaveTags(e.target.value)}
+                placeholder="tags: bass, warm, keys…"
+                style={{ background:'var(--surf)', border:'1px solid var(--bord)', borderRadius:4,
+                  padding:'6px 8px', color:'var(--fg)', fontFamily:'IBM Plex Mono', fontSize:11, outline:'none' }}
+                onKeyDown={e => { if (e.key==='Enter') doSave(); if (e.key==='Escape') { setSaving(false); setSaveTags(''); } }}/>
+              <div style={{ display:'flex', gap:6, justifyContent:'flex-end' }}>
+                <Btn onClick={() => { setSaving(false); setSaveTags(''); }}>cancel</Btn>
+                <Btn onClick={doSave} color="var(--acc)">save</Btn>
+              </div>
+            </div>
+          );
+        })() : exporting ? (
           <div style={{ display:'flex', gap:6 }}>
             <input value={exportName} onChange={e => setExportName(e.target.value)}
               placeholder="filename…" autoFocus
@@ -79,7 +94,7 @@ export const PresetBrowser: React.FC<Props> = ({ presets, currentName, onLoad, o
           </div>
         ) : (
           <div style={{ display:'flex', gap:6 }}>
-            <Btn onClick={() => { setSaveName(currentName); setSaving(true); }} color="var(--acc)">save patch</Btn>
+            <Btn onClick={() => { setSaveName(currentName); setSaveTags(''); setSaving(true); }} color="var(--acc)">save patch</Btn>
             <Btn onClick={() => { setExportName(currentName); setExporting(true); }}>export .cwsyn</Btn>
           </div>
         )}
