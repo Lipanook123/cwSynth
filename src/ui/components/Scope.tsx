@@ -2,11 +2,12 @@ import { useEffect, useRef } from 'react';
 import { engine } from '../../engine/AudioEngine';
 
 interface Props {
-  height?: number;    // px; omit or 0 to fill parent (parent must have defined height)
-  stable?: boolean;   // trigger-stable zero-crossing
-  showGrid?: boolean; // CRT-style grid lines
-  frozen?: boolean;   // stop updating
-  flex?: boolean;     // stretch width (default true)
+  height?: number;          // px; omit to fill parent (parent must have defined height)
+  stable?: boolean;         // trigger-stable zero-crossing
+  showGrid?: boolean;       // CRT-style grid lines
+  frozen?: boolean;         // stop updating
+  flex?: boolean;           // stretch width (default true)
+  onToggleFreeze?: () => void; // click/tap canvas to toggle freeze
 }
 
 function findTrigger(data: Float32Array): number {
@@ -18,7 +19,7 @@ function findTrigger(data: Float32Array): number {
   return 0;
 }
 
-export function Scope({ height, stable = false, showGrid = false, frozen = false, flex = true }: Props) {
+export function Scope({ height, stable = false, showGrid = false, frozen = false, flex = true, onToggleFreeze }: Props) {
   const fillParent = !height;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rafRef    = useRef<number>(0);
@@ -97,9 +98,11 @@ export function Scope({ height, stable = false, showGrid = false, frozen = false
   return (
     <canvas
       ref={canvasRef}
+      onClick={onToggleFreeze}
       style={{
         display: 'block',
         borderRadius: 2,
+        cursor: onToggleFreeze ? 'crosshair' : undefined,
         ...(fillParent
           ? { width: '100%', height: '100%' }
           : flex

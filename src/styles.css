@@ -201,17 +201,6 @@ html, body, #root {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--bord2); border-radius: 3px; }
 
-/* ── Mini scope strip ─────────────────────────────────────── */
-.mini-scope-strip {
-  flex-shrink: 0;
-  height: 64px;
-  border-bottom: 1px solid var(--bord);
-  background: var(--bg);
-  padding: 4px 8px;
-  display: flex;
-  align-items: stretch;
-}
-
 /* ── Input / button resets ─────────────────────────────────  */
 button { font-family: inherit; }
 input  { font-family: inherit; color: var(--fg); }
