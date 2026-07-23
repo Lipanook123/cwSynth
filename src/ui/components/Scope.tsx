@@ -73,7 +73,7 @@ export function Scope({ height, stable = false, showGrid = false, frozen = false
       ctx.lineWidth   = 1;
       ctx.beginPath(); ctx.moveTo(0, h / 2); ctx.lineTo(w, h / 2); ctx.stroke();
 
-      const analyser = engine.getAnalyser();
+      const analyser = engine.getAnalyserFor(engine.getScopeSource());
       if (!analyser) return;
       const buf = new Float32Array(analyser.fftSize);
       analyser.getFloatTimeDomainData(buf);

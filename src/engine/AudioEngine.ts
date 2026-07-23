@@ -22,6 +22,7 @@ export class AudioEngine {
   private patch: PatchParams = { ...DEFAULT_PATCH };
   private onStateChange?: () => void;
   private noteListeners = new Set<() => void>();
+  private _scopeSource: ScopeSource = 'master';
 
   constructor() {
     // Arp is created immediately so UI can configure it before the first gesture
@@ -163,6 +164,9 @@ export class AudioEngine {
   getActiveNotes(): ReadonlySet<number> { return new Set(this.voices.keys()); }
 
   getAnalyser(): AnalyserNode | null { return this.analyser ?? null; }
+
+  getScopeSource(): ScopeSource { return this._scopeSource; }
+  setScopeSource(s: ScopeSource) { this._scopeSource = s; }
 
   getAnalyserFor(source: ScopeSource): AnalyserNode | null {
     if (!this.ctx) return null;

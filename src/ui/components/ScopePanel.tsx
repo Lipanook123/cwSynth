@@ -82,6 +82,9 @@ export function ScopePanel() {
     return () => document.removeEventListener('keydown', handler);
   }, [toggleFreeze]);
 
+  // Keep engine in sync so the topbar scope mirrors the selected source
+  useEffect(() => { engine.setScopeSource(source); }, [source]);
+
   // Re-arm single trigger
   const activateSingle = useCallback(() => {
     singleArmed.current = true;
