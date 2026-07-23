@@ -98,7 +98,7 @@ export function Scope({ height, stable = false, showGrid = false, frozen = false
   return (
     <canvas
       ref={canvasRef}
-      onClick={onToggleFreeze}
+      onPointerDown={onToggleFreeze ? (e) => { e.preventDefault(); onToggleFreeze(); } : undefined}
       style={{
         display: 'block',
         borderRadius: 2,
