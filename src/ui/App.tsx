@@ -46,9 +46,6 @@ export default function App() {
   const [theme, setTheme] = useState<'dark'|'light'>(
     () => (localStorage.getItem('cw_theme') as 'dark'|'light') ?? 'dark'
   );
-  const [miniScope, setMiniScope] = useState<boolean>(
-    () => localStorage.getItem('cw_mini_scope') === 'true'
-  );
   const [arpState, setArpState] = useState<ArpState>({
     enabled: false, pattern: 'up', holdMode: 'latch', rate: 8, gate: 0.6, octaves: 1,
   });
@@ -159,10 +156,6 @@ export default function App() {
           <Knob value={patch.volume} min={0} max={1} step={0.01}
             label="vol" display={v => Math.round(v * 100) + '%'} color="var(--acc)"
             onChange={v => updatePatch({ volume: v })} size={36} />
-          <button onClick={() => setMiniScope(s => { const n = !s; localStorage.setItem('cw_mini_scope', String(n)); return n; })}
-            className="theme-btn" title="Toggle mini scope">
-            ∿
-          </button>
           <button onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')} className="theme-btn">
             {theme === 'dark' ? '☀' : '☾'}
           </button>
@@ -178,13 +171,6 @@ export default function App() {
           </button>
         ))}
       </nav>
-
-      {/* ── Mini scope strip ──────────────────────────────────────────────── */}
-      {miniScope && (
-        <div className="mini-scope-strip">
-          <Scope stable />
-        </div>
-      )}
 
       {/* ── Tab randomise strip (shown for all tabs except presets/scope) ── */}
       {tab !== 'presets' && tab !== 'scope' && (
