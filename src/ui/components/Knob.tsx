@@ -15,7 +15,8 @@ interface KnobProps {
 export const Knob: React.FC<KnobProps> = ({
   value, min, max, step = 0.001, label, display, onChange, color = 'var(--acc)', size = 44,
 }) => {
-  const dragRef = useRef<{ startY: number; startVal: number } | null>(null);
+  const dragRef   = useRef<{ startY: number; startVal: number } | null>(null);
+  const touchId   = useRef<number | null>(null);
   const [editing, setEditing] = useState(false);
   const [editVal, setEditVal] = useState('');
 
@@ -64,18 +65,25 @@ export const Knob: React.FC<KnobProps> = ({
   const onTouchStart = useCallback((e: React.TouchEvent) => {
     if (editing) return;
     e.preventDefault();
-    dragRef.current = { startY: e.touches[0].clientY, startVal: value };
+    const t = e.changedTouches[0];
+    touchId.current = t.identifier;
+    dragRef.current = { startY: t.clientY, startVal: value };
   }, [value, editing]);
 
   const onTouchMove = useCallback((e: React.TouchEvent) => {
     e.preventDefault();
-    if (!dragRef.current) return;
-    const delta = (dragRef.current.startY - e.touches[0].clientY) / 200;
+    if (!dragRef.current || touchId.current === null) return;
+    const t = Array.from(e.changedTouches).find(c => c.identifier === touchId.current);
+    if (!t) return;
+    const delta = (dragRef.current.startY - t.clientY) / 200;
     onChange(clamp(snap(dragRef.current.startVal + delta * (max - min))));
   }, [min, max, onChange, snap]);
 
-  const onTouchEnd = useCallback(() => {
-    dragRef.current = null;
+  const onTouchEnd = useCallback((e: React.TouchEvent) => {
+    if (Array.from(e.changedTouches).some(c => c.identifier === touchId.current)) {
+      dragRef.current = null;
+      touchId.current = null;
+    }
   }, []);
 
   const r = size / 2 - 4;

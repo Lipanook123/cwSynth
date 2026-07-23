@@ -116,7 +116,6 @@ export function Keyboard() {
                 onMouseUp={() => off(k.semi)}
                 onMouseLeave={() => off(k.semi)}
                 onTouchStart={e => {
-                  e.preventDefault();
                   Array.from(e.changedTouches).forEach(t => {
                     lastTouch.current.set(k.semi, Date.now());
                     touchMap.current.set(t.identifier, k.semi);
@@ -138,6 +137,7 @@ export function Keyboard() {
                 style={{
                   position: 'absolute', left: p.x, top: 0, width: p.w, height: p.h, zIndex: p.z,
                   borderRadius: '0 0 4px 4px', cursor: 'pointer', userSelect: 'none',
+                  touchAction: 'none',
                   WebkitTapHighlightColor: 'transparent',
                   background: active
                     ? k.isSharp ? 'var(--acc)' : 'var(--acc)99'
