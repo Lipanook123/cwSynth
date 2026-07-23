@@ -7,6 +7,7 @@ import { FilterPanel } from './components/FilterPanel';
 import { FxPanel } from './components/FxPanel';
 import { ArpPanel } from './components/ArpPanel';
 import { LfoPanel } from './components/LfoPanel';
+import { ModMatrix } from './components/ModMatrix';
 import { PresetBrowser } from './components/PresetBrowser';
 import { RandomControls } from './components/RandomControls';
 import { Keyboard } from './components/Keyboard';
@@ -21,7 +22,7 @@ import {
 } from '../engine/Randomiser';
 import type { RandomMode } from '../engine/Randomiser';
 
-type Tab = 'operators' | 'algorithm' | 'filter' | 'fx' | 'arp' | 'lfo' | 'presets';
+type Tab = 'operators' | 'algorithm' | 'filter' | 'fx' | 'arp' | 'lfo' | 'mod' | 'presets';
 const TABS: { id: Tab; label: string }[] = [
   { id: 'operators', label: 'Operators' },
   { id: 'algorithm', label: 'Algorithm' },
@@ -29,6 +30,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'fx',        label: 'FX'        },
   { id: 'arp',       label: 'Arp'       },
   { id: 'lfo',       label: 'LFO'       },
+  { id: 'mod',       label: 'Mod'       },
   { id: 'presets',   label: 'Presets'   },
 ];
 
@@ -219,6 +221,10 @@ export default function App() {
 
         {tab === 'lfo' && (
           <LfoPanel patch={patch} onChange={updatePatch} />
+        )}
+
+        {tab === 'mod' && (
+          <ModMatrix patch={patch} onChange={updatePatch} />
         )}
 
         {tab === 'presets' && (
