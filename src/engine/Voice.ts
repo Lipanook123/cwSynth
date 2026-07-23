@@ -218,6 +218,18 @@ export class Voice {
     this.lfoB.stop();
   }
 
+  connectOperatorOutputsTo(targets: GainNode[]): void {
+    for (let i = 0; i < Math.min(this.operators.length, targets.length); i++) {
+      this.operators[i].outputGain.connect(targets[i]);
+    }
+  }
+
+  disconnectOperatorOutputsFrom(targets: GainNode[]): void {
+    for (let i = 0; i < Math.min(this.operators.length, targets.length); i++) {
+      try { this.operators[i].outputGain.disconnect(targets[i]); } catch {}
+    }
+  }
+
   dispose() {
     this.operators.forEach(op => op.dispose());
     this.lfoA.dispose();
