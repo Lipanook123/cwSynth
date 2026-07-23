@@ -62,6 +62,51 @@ export default function App() {
     localStorage.setItem('cw_theme', theme);
   }, [theme]);
 
+  // During multi-touch, browsers suppress synthesised click events for
+  // non-primary pointers. Detect secondary pointer taps and synthesise
+  // a click manually, but only if the browser didn't already fire one.
+  useEffect(() => {
+    const pending = new Map<number, Element>();
+
+    const onDown = (e: PointerEvent) => {
+      if (e.isPrimary) return;
+      pending.set(e.pointerId, e.target as Element);
+    };
+
+    const onUp = (e: PointerEvent) => {
+      if (e.isPrimary) return;
+      const target = pending.get(e.pointerId);
+      pending.delete(e.pointerId);
+      if (!target) return;
+      const under = document.elementFromPoint(e.clientX, e.clientY);
+      if (!under || (target !== under && !target.contains(under))) return;
+
+      // Wait one task to see if the browser fires a native click first.
+      let nativeFired = false;
+      const guard = () => { nativeFired = true; };
+      target.addEventListener('click', guard, { once: true, capture: true });
+      setTimeout(() => {
+        target.removeEventListener('click', guard, true);
+        if (!nativeFired) {
+          target.dispatchEvent(new MouseEvent('click', {
+            bubbles: true, cancelable: true, clientX: e.clientX, clientY: e.clientY,
+          }));
+        }
+      }, 0);
+    };
+
+    const onCancel = (e: PointerEvent) => pending.delete(e.pointerId);
+
+    document.addEventListener('pointerdown', onDown, true);
+    document.addEventListener('pointerup',   onUp,   true);
+    document.addEventListener('pointercancel', onCancel, true);
+    return () => {
+      document.removeEventListener('pointerdown', onDown, true);
+      document.removeEventListener('pointerup',   onUp,   true);
+      document.removeEventListener('pointercancel', onCancel, true);
+    };
+  }, []);
+
   const algo = ALGORITHMS.find(a => a.id === patch.algorithm) ?? ALGORITHMS[0];
 
   const updateOp = (i: number, p: object) => {
