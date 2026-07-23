@@ -44,6 +44,7 @@ export interface LfoParams {
   depth: number;       // 0..1 (interpreted per-destination)
   delay: number;       // s before onset
   sync: boolean;       // retrigger on note-on
+  swing: number;       // 0 = even, 1 = max shuffle (2:1 half-cycle ratio)
 }
 
 export interface ModSlot {
@@ -115,6 +116,7 @@ export const DEFAULT_LFO: LfoParams = {
   depth: 0.3,
   delay: 0.2,
   sync: true,
+  swing: 0,
 };
 
 export const DEFAULT_FX: FxParams = {

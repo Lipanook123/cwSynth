@@ -1,6 +1,73 @@
 import type { LfoParams } from './Types';
 import { logger } from '../debug/Logger';
 
+const SINE_STEPS = 16; // steps per half-cycle for piecewise-sine approximation
+
+function scheduleShape(
+  param: AudioParam,
+  shape: string,
+  startTime: number,
+  N: number,
+  T: number,
+  upTime: number,
+  downTime: number,
+) {
+  for (let i = 0; i < N; i++) {
+    const t0 = startTime + i * T;
+    switch (shape) {
+      case 'square':
+        param.setValueAtTime(+1, t0);
+        param.setValueAtTime(-1, t0 + upTime);
+        break;
+
+      case 'sawtooth':
+        param.setValueAtTime(-1, t0);
+        param.linearRampToValueAtTime(+1, t0 + upTime);
+        param.setValueAtTime(-1, t0 + T - 1e-6); // hard reset at end of cycle
+        break;
+
+      case 'triangle':
+        param.setValueAtTime(-1, t0);
+        param.linearRampToValueAtTime(+1, t0 + upTime);
+        param.linearRampToValueAtTime(-1, t0 + T);
+        break;
+
+      default: // sine — piecewise linear per half-cycle
+        param.setValueAtTime(0, t0);
+        for (let s = 1; s <= SINE_STEPS; s++) {
+          param.linearRampToValueAtTime(
+            Math.sin((s / SINE_STEPS) * Math.PI),
+            t0 + (s / SINE_STEPS) * upTime,
+          );
+        }
+        for (let s = 1; s <= SINE_STEPS; s++) {
+          param.linearRampToValueAtTime(
+            Math.sin(Math.PI + (s / SINE_STEPS) * Math.PI),
+            t0 + upTime + (s / SINE_STEPS) * downTime,
+          );
+        }
+        break;
+    }
+  }
+}
+
+// Random uses accumulated time because alternating durations shift each step's start
+function scheduleRandom(
+  param: AudioParam,
+  startTime: number,
+  totalSec: number,
+  upTime: number,
+  downTime: number,
+) {
+  let t = startTime;
+  let step = 0;
+  while (t < startTime + totalSec) {
+    param.setValueAtTime(Math.random() * 2 - 1, t);
+    t += step % 2 === 0 ? upTime : downTime;
+    step++;
+  }
+}
+
 export class Lfo {
   private ctx: AudioContext;
   private oscNode: AudioScheduledSourceNode | null = null;
@@ -15,34 +82,48 @@ export class Lfo {
 
   start(params: LfoParams, startTime: number) {
     this.stop();
-    logger.log(`lfo start shape=${params.shape} rate=${params.rate.toFixed(2)} depth=${params.depth.toFixed(2)} delay=${params.delay.toFixed(2)} t=${startTime.toFixed(3)}`);
+    const { shape, rate, depth, delay, swing } = params;
+    logger.log(`lfo start shape=${shape} rate=${rate.toFixed(2)} depth=${depth.toFixed(2)} delay=${delay.toFixed(2)} swing=${swing.toFixed(2)} t=${startTime.toFixed(3)}`);
 
-    if (params.shape === 'random') {
+    const T        = 1 / rate;
+    const upTime   = (0.5 + swing * 0.1667) * T;
+    const downTime = T - upTime;
+    const totalSec = 120;
+
+    if (shape === 'sine' && swing === 0) {
+      // Perfect sine when no swing needed — keep OscillatorNode
+      const osc = this.ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.value = rate;
+      osc.connect(this.onsetGain);
+      osc.start(startTime);
+      this.oscNode = osc;
+    } else if (shape === 'random') {
       const cs = this.ctx.createConstantSource();
-      const steps = Math.ceil(params.rate * 120) + 1;
-      for (let i = 0; i < steps; i++) {
-        cs.offset.setValueAtTime(Math.random() * 2 - 1, startTime + i / params.rate);
-      }
+      scheduleRandom(cs.offset, startTime, totalSec, upTime, downTime);
       cs.connect(this.onsetGain);
       cs.start(startTime);
       this.oscNode = cs;
     } else {
-      const osc = this.ctx.createOscillator();
-      osc.type = params.shape as OscillatorType;
-      osc.frequency.value = params.rate;
-      osc.connect(this.onsetGain);
-      osc.start(startTime);
-      this.oscNode = osc;
+      const cs = this.ctx.createConstantSource();
+      const N = Math.ceil(rate * totalSec) + 2;
+      scheduleShape(cs.offset, shape, startTime, N, T, upTime, downTime);
+      cs.connect(this.onsetGain);
+      cs.start(startTime);
+      this.oscNode = cs;
     }
 
+    // Delay onset ramp
     const g = this.onsetGain.gain;
     g.cancelScheduledValues(startTime);
     g.setValueAtTime(0, startTime);
-    if (params.delay > 0) {
-      g.linearRampToValueAtTime(1, startTime + params.delay);
+    if (delay > 0) {
+      g.linearRampToValueAtTime(1, startTime + delay);
     } else {
       g.setValueAtTime(1, startTime);
     }
+
+    void depth; // depth is applied by Voice via addConnection scaleAmount
   }
 
   addConnection(target: AudioParam, scaleAmount: number) {

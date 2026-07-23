@@ -95,6 +95,7 @@ export default function App() {
           depth: rng() * (mode === 'safe' ? 0.6 : 1),
           delay: mode === 'safe' ? rng() * 1 : rng() * 3,
           sync: rng() > 0.3,
+          swing: rng() * (mode === 'safe' ? 0.3 : 0.7),
         });
         updatePatch({ lfo1: mkLfo(), lfo2: mkLfo() });
         break;
