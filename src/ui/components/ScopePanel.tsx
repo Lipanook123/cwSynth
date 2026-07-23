@@ -82,8 +82,11 @@ export function ScopePanel() {
     return () => document.removeEventListener('keydown', handler);
   }, [toggleFreeze]);
 
-  // Keep engine in sync so the topbar scope mirrors the selected source
+  // Keep engine in sync so the topbar scope mirrors all display settings
   useEffect(() => { engine.setScopeSource(source); }, [source]);
+  useEffect(() => {
+    engine.setScopeParams({ vDiv: V_DIVS[vDivIdx], yPos, coupling, trigLevel, trigEdge });
+  }, [vDivIdx, yPos, coupling, trigLevel, trigEdge]);
 
   // Re-arm single trigger
   const activateSingle = useCallback(() => {
