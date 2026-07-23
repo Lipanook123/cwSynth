@@ -9,6 +9,14 @@ const BASE_SEMITONE = 69;
 
 export type ScopeSource = 'master' | 'pre-fx' | 'op1' | 'op2' | 'op3' | 'op4' | 'op5' | 'op6';
 
+export interface ScopeDisplayParams {
+  vDiv: number;
+  yPos: number;
+  coupling: 'AC' | 'DC';
+  trigLevel: number;
+  trigEdge: 'rise' | 'fall';
+}
+
 export class AudioEngine {
   private ctx: AudioContext | null = null;
   private masterGain!: GainNode;
@@ -23,6 +31,7 @@ export class AudioEngine {
   private onStateChange?: () => void;
   private noteListeners = new Set<() => void>();
   private _scopeSource: ScopeSource = 'master';
+  private _scopeParams: ScopeDisplayParams = { vDiv: 0.5, yPos: 0, coupling: 'DC', trigLevel: 0, trigEdge: 'rise' };
 
   constructor() {
     // Arp is created immediately so UI can configure it before the first gesture
@@ -167,6 +176,9 @@ export class AudioEngine {
 
   getScopeSource(): ScopeSource { return this._scopeSource; }
   setScopeSource(s: ScopeSource) { this._scopeSource = s; }
+
+  getScopeParams(): ScopeDisplayParams { return this._scopeParams; }
+  setScopeParams(p: ScopeDisplayParams) { this._scopeParams = p; }
 
   getAnalyserFor(source: ScopeSource): AnalyserNode | null {
     if (!this.ctx) return null;

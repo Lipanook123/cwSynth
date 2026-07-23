@@ -10,14 +10,6 @@ interface Props {
   onToggleFreeze?: () => void; // click/tap canvas to toggle freeze
 }
 
-function findTrigger(data: Float32Array): number {
-  const mid   = Math.floor(data.length / 2);
-  const range = Math.floor(data.length / 4);
-  for (let i = mid - range; i < mid + range - 1; i++) {
-    if (data[i] <= 0 && data[i + 1] > 0) return i;
-  }
-  return 0;
-}
 
 export function Scope({ height, stable = false, showGrid = false, frozen = false, flex = true, onToggleFreeze }: Props) {
   const fillParent = !height;
@@ -78,15 +70,33 @@ export function Scope({ height, stable = false, showGrid = false, frozen = false
       const buf = new Float32Array(analyser.fftSize);
       analyser.getFloatTimeDomainData(buf);
 
-      const start  = stable ? findTrigger(buf) : 0;
+      const { vDiv, yPos, coupling, trigLevel, trigEdge } = engine.getScopeParams();
+
+      // AC coupling
+      if (coupling === 'AC') {
+        let sum = 0; for (const s of buf) sum += s;
+        const mean = sum / buf.length;
+        for (let i = 0; i < buf.length; i++) buf[i] -= mean;
+      }
+
+      // Trigger (always applied, using engine params)
+      let start = 0;
+      const mid = Math.floor(buf.length / 2);
+      const range = Math.floor(buf.length / 4);
+      for (let i = mid - range; i < mid + range - 1; i++) {
+        if (trigEdge === 'rise' && buf[i] <= trigLevel && buf[i + 1] > trigLevel) { start = i; break; }
+        if (trigEdge === 'fall' && buf[i] >= trigLevel && buf[i + 1] < trigLevel) { start = i; break; }
+      }
+
       const length = buf.length - start;
+      const divPx  = h / 8; // 8 vertical divisions, matching ScopePanel
 
       ctx.strokeStyle = acc;
       ctx.lineWidth   = 1.5 * devicePixelRatio;
       ctx.beginPath();
       for (let i = 0; i < length; i++) {
         const x = (i / length) * w;
-        const y = (1 - (buf[start + i] + 1) / 2) * h;
+        const y = (h / 2) - ((buf[start + i] / vDiv) + yPos) * divPx;
         i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
       }
       ctx.stroke();
