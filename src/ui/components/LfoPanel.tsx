@@ -49,7 +49,7 @@ function LfoSection({ label, params, onChange }: {
       </div>
 
       {/* Knobs */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8 }}>
         <Knob value={params.rate} min={0.01} max={20} step={0.01}
           label="rate" display={v => v.toFixed(2) + 'Hz'} color="var(--acc)"
           onChange={v => onChange({ rate: v })} size={48} />
@@ -59,6 +59,9 @@ function LfoSection({ label, params, onChange }: {
         <Knob value={params.delay} min={0} max={4} step={0.01}
           label="delay" display={v => v.toFixed(2) + 's'} color="var(--acc)"
           onChange={v => onChange({ delay: v })} size={48} />
+        <Knob value={params.swing} min={0} max={1} step={0.01}
+          label="swing" display={v => Math.round(v * 100) + '%'} color="var(--acc)"
+          onChange={v => onChange({ swing: v })} size={48} />
       </div>
     </div>
   );

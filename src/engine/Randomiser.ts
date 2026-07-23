@@ -148,6 +148,7 @@ export function randomLfo(ctx: RandomContext): LfoParams {
     depth: mode === 'safe' ? rRange(rng, 0, 0.5) : rRange(rng, 0, 1),
     delay: mode === 'safe' ? rRange(rng, 0, 0.5) : rRange(rng, 0, 2),
     sync:  rBool(rng, 0.6),
+    swing: mode === 'safe' ? rRange(rng, 0, 0.3) : rRange(rng, 0, 0.7),
   };
 }
 

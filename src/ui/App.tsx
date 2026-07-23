@@ -8,6 +8,7 @@ import { FxPanel } from './components/FxPanel';
 import { ArpPanel } from './components/ArpPanel';
 import { LfoPanel } from './components/LfoPanel';
 import { ModMatrix } from './components/ModMatrix';
+import { ScopePanel } from './components/ScopePanel';
 import { PresetBrowser } from './components/PresetBrowser';
 import { RandomControls } from './components/RandomControls';
 import { Keyboard } from './components/Keyboard';
@@ -22,7 +23,7 @@ import {
 } from '../engine/Randomiser';
 import type { RandomMode } from '../engine/Randomiser';
 
-type Tab = 'operators' | 'algorithm' | 'filter' | 'fx' | 'arp' | 'lfo' | 'mod' | 'presets';
+type Tab = 'operators' | 'algorithm' | 'filter' | 'fx' | 'arp' | 'lfo' | 'mod' | 'scope' | 'presets';
 const TABS: { id: Tab; label: string }[] = [
   { id: 'operators', label: 'Operators' },
   { id: 'algorithm', label: 'Algorithm' },
@@ -31,6 +32,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'arp',       label: 'Arp'       },
   { id: 'lfo',       label: 'LFO'       },
   { id: 'mod',       label: 'Mod'       },
+  { id: 'scope',     label: 'Scope'     },
   { id: 'presets',   label: 'Presets'   },
 ];
 
@@ -43,6 +45,9 @@ export default function App() {
   const [tab, setTab] = useState<Tab>('operators');
   const [theme, setTheme] = useState<'dark'|'light'>(
     () => (localStorage.getItem('cw_theme') as 'dark'|'light') ?? 'dark'
+  );
+  const [miniScope, setMiniScope] = useState<boolean>(
+    () => localStorage.getItem('cw_mini_scope') === 'true'
   );
   const [arpState, setArpState] = useState<ArpState>({
     enabled: false, pattern: 'up', holdMode: 'latch', rate: 8, gate: 0.6, octaves: 1,
@@ -95,6 +100,7 @@ export default function App() {
           depth: rng() * (mode === 'safe' ? 0.6 : 1),
           delay: mode === 'safe' ? rng() * 1 : rng() * 3,
           sync: rng() > 0.3,
+          swing: rng() * (mode === 'safe' ? 0.3 : 0.7),
         });
         updatePatch({ lfo1: mkLfo(), lfo2: mkLfo() });
         break;
@@ -153,6 +159,10 @@ export default function App() {
           <Knob value={patch.volume} min={0} max={1} step={0.01}
             label="vol" display={v => Math.round(v * 100) + '%'} color="var(--acc)"
             onChange={v => updatePatch({ volume: v })} size={36} />
+          <button onClick={() => setMiniScope(s => { const n = !s; localStorage.setItem('cw_mini_scope', String(n)); return n; })}
+            className="theme-btn" title="Toggle mini scope">
+            ∿
+          </button>
           <button onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')} className="theme-btn">
             {theme === 'dark' ? '☀' : '☾'}
           </button>
@@ -169,8 +179,15 @@ export default function App() {
         ))}
       </nav>
 
-      {/* ── Tab randomise strip (shown for all tabs except presets) ───────── */}
-      {tab !== 'presets' && (
+      {/* ── Mini scope strip ──────────────────────────────────────────────── */}
+      {miniScope && (
+        <div className="mini-scope-strip">
+          <Scope stable />
+        </div>
+      )}
+
+      {/* ── Tab randomise strip (shown for all tabs except presets/scope) ── */}
+      {tab !== 'presets' && tab !== 'scope' && (
         <div className="tab-rand-strip">
           <span style={{ fontSize: 9, color: 'var(--muted)', letterSpacing: '.1em', textTransform: 'uppercase' }}>
             Randomise {TABS.find(t => t.id === tab)?.label}
@@ -226,6 +243,8 @@ export default function App() {
         {tab === 'mod' && (
           <ModMatrix patch={patch} onChange={updatePatch} />
         )}
+
+        {tab === 'scope' && <ScopePanel />}
 
         {tab === 'presets' && (
           <PresetBrowser
