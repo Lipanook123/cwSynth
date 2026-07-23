@@ -75,7 +75,7 @@ const BASS_PATCH: PatchParams = {
 };
 
 export const FACTORY_PRESETS: PresetMeta[] = [
-  { id:'init',    name:'Init',       author:'CW Synth', tags:['init'],           patch:DEFAULT_PATCH },
+  { id:'init',    name:'Init',       author:'CW Synth', tags:['init'],           patch:{ ...DEFAULT_PATCH, name:'Init' } },
   { id:'whistle', name:'Whistle',    author:'CW Synth', tags:['wind','organic'], patch:WHISTLE_PATCH },
   { id:'ep',      name:'E. Piano',   author:'CW Synth', tags:['keys','warm'],    patch:EP_PATCH },
   { id:'bell',    name:'Bell',       author:'CW Synth', tags:['bell','metallic'],patch:BELL_PATCH },

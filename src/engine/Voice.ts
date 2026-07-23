@@ -1,6 +1,8 @@
 import { Operator } from './Operator';
 import { ALGORITHMS } from './Algorithms';
-import type { PatchParams, FilterParams } from './Types';
+import type { PatchParams, FilterParams, ModDest } from './Types';
+import { Lfo } from './Lfo';
+import { logger } from '../debug/Logger';
 
 export class Voice {
   private ctx: AudioContext;
@@ -15,6 +17,8 @@ export class Voice {
   public noteHz: number;
   private patch: PatchParams;
   private freqConnections: Array<[number, number]> = []; // [source op idx, target op idx]
+  private lfoA: Lfo;
+  private lfoB: Lfo;
 
   constructor(ctx: AudioContext, patch: PatchParams, semitone: number, hz: number) {
     this.ctx = ctx;
@@ -39,6 +43,10 @@ export class Voice {
 
     // Operators
     this.operators = patch.operators.map(op => new Operator(ctx, op));
+
+    // LFOs (started on noteOn)
+    this.lfoA = new Lfo(ctx);
+    this.lfoB = new Lfo(ctx);
 
     // Signal chain: ops → filter chain → drive → output
     // operators connect directly based on algorithm
@@ -135,6 +143,54 @@ export class Voice {
       fc.linearRampToValueAtTime(baseCutoff + envRange, time + fp.attack);
       fc.linearRampToValueAtTime(baseCutoff + envRange * fp.sustain, time + fp.attack + fp.decay);
     }
+
+    // LFO + mod matrix
+    const activeSlots = p.modMatrix.filter(s => s.enabled);
+    const hasLfo1 = activeSlots.some(s => s.source === 'lfo1');
+    const hasLfo2 = activeSlots.some(s => s.source === 'lfo2');
+    logger.log(`voice lfo wire: slots=${activeSlots.length} lfo1=${hasLfo1} lfo2=${hasLfo2}`);
+    if (hasLfo1) this.lfoA.start(p.lfo1, time);
+    if (hasLfo2) this.lfoB.start(p.lfo2, time);
+    for (const slot of activeSlots) {
+      const lfo = slot.source === 'lfo1' ? this.lfoA : slot.source === 'lfo2' ? this.lfoB : null;
+      if (!lfo) continue;
+      const lfoDepth = slot.source === 'lfo1' ? p.lfo1.depth : p.lfo2.depth;
+      const targets = this._getModTargets(slot.dest);
+      const scale = this._modScale(slot.dest, slot.amount * lfoDepth);
+      targets.forEach(t => lfo.addConnection(t, scale));
+    }
+  }
+
+  private _getModTargets(dest: ModDest): AudioParam[] {
+    const opLvl = dest.match(/^op(\d)_level$/);
+    if (opLvl) { const op = this.operators[+opLvl[1] - 1]; return op ? [op.getLevelParam()] : []; }
+    const opRat = dest.match(/^op(\d)_ratio$/);
+    if (opRat) { const op = this.operators[+opRat[1] - 1]; return op ? [op.getOscFrequency()] : []; }
+    switch (dest) {
+      case 'filter_cutoff': return [this.filter.frequency];
+      case 'filter_res':    return [this.filter.Q];
+      case 'amp':           return [this.output.gain];
+      case 'pitch':
+        return this.operators
+          .filter((_, i) => this.patch.operators[i]?.enabled)
+          .map(op => op.getOscFrequency());
+      default: return [];
+    }
+  }
+
+  private _modScale(dest: ModDest, amount: number): number {
+    const p = this.patch;
+    const opLvl = dest.match(/^op(\d)_level$/);
+    if (opLvl) return amount * (p.operators[+opLvl[1] - 1]?.level ?? 0.5);
+    const opRat = dest.match(/^op(\d)_ratio$/);
+    if (opRat) return amount * this.noteHz * (p.operators[+opRat[1] - 1]?.ratio ?? 1) * 0.06;
+    switch (dest) {
+      case 'filter_cutoff': return amount * p.filter.cutoff;
+      case 'filter_res':    return amount * p.filter.resonance * 2;
+      case 'amp':           return amount * p.volume * 0.5;
+      case 'pitch':         return amount * this.noteHz * 0.06;
+      default:              return amount;
+    }
   }
 
   noteOff(time: number) {
@@ -157,10 +213,15 @@ export class Voice {
     const g = this.output.gain;
     g.setValueAtTime(g.value, time);
     g.linearRampToValueAtTime(0, time + maxRel + 0.05);
+
+    this.lfoA.stop();
+    this.lfoB.stop();
   }
 
   dispose() {
     this.operators.forEach(op => op.dispose());
+    this.lfoA.dispose();
+    this.lfoB.dispose();
     try { this.output.disconnect(); } catch {}
     try { this.filter.disconnect(); } catch {}
     try { this.driveNode.disconnect(); } catch {}

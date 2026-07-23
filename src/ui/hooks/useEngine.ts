@@ -40,8 +40,11 @@ export function useEngine() {
 
   const importPatch = useCallback(async (file: File) => {
     const p = await presetManager.importFile(file);
+    const name = p.name || file.name.replace(/\.[^.]+$/, '');
+    presetManager.save(name, p);
     engine.loadPatch(p);
     setPatch({ ...engine.getPatch() });
+    setPresets(presetManager.all());
   }, []);
 
   return { patch, updatePatch, presets, loadPreset, savePreset, deletePreset, exportPatch, importPatch };

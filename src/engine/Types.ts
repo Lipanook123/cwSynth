@@ -126,7 +126,7 @@ export const DEFAULT_FX: FxParams = {
 };
 
 export const DEFAULT_PATCH: PatchParams = {
-  name: 'Init',
+  name: 'Untitled',
   author: '',
   tags: [],
   version: 1,
