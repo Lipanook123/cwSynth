@@ -166,9 +166,9 @@ html, body, #root {
   /* 4-column algorithm picker (was 8) */
   .algo-grid { grid-template-columns: repeat(4, 1fr); }
 
-  /* Hide scope and global randomise from topbar — per-tab strip covers randomise */
-  .topbar-scope { display: none; }
+  /* Hide global randomise from topbar — per-tab strip covers it */
   .topbar-rand  { display: none; }
+  /* topbar-scope stays visible on mobile — mini scope toggle kept accessible */
 
   /* Slightly taller tap targets on tab bar */
   .tab-btn { padding: 10px 14px; }
@@ -200,6 +200,17 @@ html, body, #root {
 ::-webkit-scrollbar       { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--bord2); border-radius: 3px; }
+
+/* ── Mini scope strip ─────────────────────────────────────── */
+.mini-scope-strip {
+  flex-shrink: 0;
+  height: 64px;
+  border-bottom: 1px solid var(--bord);
+  background: var(--bg);
+  padding: 4px 8px;
+  display: flex;
+  align-items: stretch;
+}
 
 /* ── Input / button resets ─────────────────────────────────  */
 button { font-family: inherit; }
