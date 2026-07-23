@@ -39,16 +39,16 @@ function buildPositions() {
 const { pos, totalW } = buildPositions();
 
 export function Keyboard() {
-  const held         = useRef(new Set<number>());
-  const touchMap     = useRef(new Map<number, number>());
-  const lastTouch    = useRef(new Map<number, number>());
-  const scrollRef    = useRef<HTMLDivElement>(null);
+  const held      = useRef(new Set<number>());
+  const ptrMap    = useRef(new Map<number, number>());
+  const scrollRef = useRef<HTMLDivElement>(null);
   const [activeNotes, setActiveNotes] = useState<ReadonlySet<number>>(new Set());
   const [slideLock, setSlideLock] = useState(false);
+  const slideLockRef = useRef(slideLock);
+  slideLockRef.current = slideLock;
 
   useEffect(() => engine.addNoteListener(() => setActiveNotes(engine.getActiveNotes())), []);
 
-  // Scroll to middle C (MIDI 60) on mount
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
@@ -59,21 +59,31 @@ export function Keyboard() {
   const on  = useCallback((semi: number) => { if (held.current.has(semi)) return; held.current.add(semi); engine.noteOn(semi); }, []);
   const off = useCallback((semi: number) => { held.current.delete(semi); engine.noteOff(semi); }, []);
 
-  const onSlideMove = useCallback((e: React.TouchEvent) => {
+  const onPtrDown = useCallback((semi: number, e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
-    Array.from(e.changedTouches).forEach(t => {
-      const el = document.elementFromPoint(t.clientX, t.clientY) as HTMLElement | null;
-      const semiStr = el?.closest('[data-semi]')?.getAttribute('data-semi');
-      if (!semiStr) return;
-      const newSemi = parseInt(semiStr);
-      const oldSemi = touchMap.current.get(t.identifier);
-      if (oldSemi !== newSemi) {
-        if (oldSemi != null) off(oldSemi);
-        on(newSemi);
-        touchMap.current.set(t.identifier, newSemi);
-      }
-    });
+    (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
+    ptrMap.current.set(e.pointerId, semi);
+    on(semi);
+  }, [on]);
+
+  const onPtrMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (!slideLockRef.current || !ptrMap.current.has(e.pointerId)) return;
+    const el = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
+    const semiStr = el?.closest('[data-semi]')?.getAttribute('data-semi');
+    if (!semiStr) return;
+    const newSemi = parseInt(semiStr);
+    const oldSemi = ptrMap.current.get(e.pointerId);
+    if (oldSemi !== newSemi) {
+      if (oldSemi != null) off(oldSemi);
+      on(newSemi);
+      ptrMap.current.set(e.pointerId, newSemi);
+    }
   }, [on, off]);
+
+  const onPtrUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    const s = ptrMap.current.get(e.pointerId);
+    if (s != null) { off(s); ptrMap.current.delete(e.pointerId); }
+  }, [off]);
 
   return (
     <div style={{ flexShrink: 0, borderTop: '2px solid var(--bord)' }}>
@@ -96,8 +106,7 @@ export function Keyboard() {
       <div
         ref={scrollRef}
         style={{ height: NH + 16, background: 'var(--bg)', overflowX: 'auto', overflowY: 'hidden',
-          touchAction: slideLock ? 'none' : 'pan-x', scrollbarWidth: 'none' }}
-        onTouchMove={slideLock ? onSlideMove : undefined}
+          touchAction: 'pan-x', scrollbarWidth: 'none' }}
       >
         <div style={{ position: 'relative', width: totalW, height: NH + 16, paddingTop: 8 }}>
           {KEYS.map(k => {
@@ -108,32 +117,10 @@ export function Keyboard() {
               <div
                 key={k.semi}
                 data-semi={k.semi}
-                onMouseDown={e => {
-                  if (Date.now() - (lastTouch.current.get(k.semi) ?? 0) < 500) return;
-                  e.preventDefault(); on(k.semi);
-                }}
-                onMouseEnter={e => { if (e.buttons === 1) on(k.semi); }}
-                onMouseUp={() => off(k.semi)}
-                onMouseLeave={() => off(k.semi)}
-                onTouchStart={e => {
-                  Array.from(e.changedTouches).forEach(t => {
-                    lastTouch.current.set(k.semi, Date.now());
-                    touchMap.current.set(t.identifier, k.semi);
-                    on(k.semi);
-                  });
-                }}
-                onTouchEnd={e => {
-                  Array.from(e.changedTouches).forEach(t => {
-                    const s = touchMap.current.get(t.identifier);
-                    if (s != null) { off(s); touchMap.current.delete(t.identifier); }
-                  });
-                }}
-                onTouchCancel={e => {
-                  Array.from(e.changedTouches).forEach(t => {
-                    const s = touchMap.current.get(t.identifier);
-                    if (s != null) { off(s); touchMap.current.delete(t.identifier); }
-                  });
-                }}
+                onPointerDown={e => onPtrDown(k.semi, e)}
+                onPointerMove={onPtrMove}
+                onPointerUp={onPtrUp}
+                onPointerCancel={onPtrUp}
                 style={{
                   position: 'absolute', left: p.x, top: 0, width: p.w, height: p.h, zIndex: p.z,
                   borderRadius: '0 0 4px 4px', cursor: 'pointer', userSelect: 'none',
