@@ -6,6 +6,7 @@ import { AlgorithmView } from './components/AlgorithmView';
 import { FilterPanel } from './components/FilterPanel';
 import { FxPanel } from './components/FxPanel';
 import { ArpPanel } from './components/ArpPanel';
+import { LfoPanel } from './components/LfoPanel';
 import { PresetBrowser } from './components/PresetBrowser';
 import { RandomControls } from './components/RandomControls';
 import { Keyboard } from './components/Keyboard';
@@ -20,13 +21,14 @@ import {
 } from '../engine/Randomiser';
 import type { RandomMode } from '../engine/Randomiser';
 
-type Tab = 'operators' | 'algorithm' | 'filter' | 'fx' | 'arp' | 'presets';
+type Tab = 'operators' | 'algorithm' | 'filter' | 'fx' | 'arp' | 'lfo' | 'presets';
 const TABS: { id: Tab; label: string }[] = [
   { id: 'operators', label: 'Operators' },
   { id: 'algorithm', label: 'Algorithm' },
   { id: 'filter',    label: 'Filter'    },
   { id: 'fx',        label: 'FX'        },
   { id: 'arp',       label: 'Arp'       },
+  { id: 'lfo',       label: 'LFO'       },
   { id: 'presets',   label: 'Presets'   },
 ];
 
@@ -80,6 +82,19 @@ export default function App() {
       case 'arp': {
         const a = randomiseArp(patch, s, mode);
         setArpState(prev => ({ ...prev, ...a, pattern: a.pattern as ArpState['pattern'] }));
+        break;
+      }
+      case 'lfo': {
+        const rng = mulberry32str(s);
+        const shapes = ['sine', 'triangle', 'sawtooth', 'square', 'random'] as const;
+        const mkLfo = () => ({
+          shape: shapes[Math.floor(rng() * shapes.length)],
+          rate: mode === 'safe' ? 0.5 + rng() * 9.5 : rng() * 20,
+          depth: rng() * (mode === 'safe' ? 0.6 : 1),
+          delay: mode === 'safe' ? rng() * 1 : rng() * 3,
+          sync: rng() > 0.3,
+        });
+        updatePatch({ lfo1: mkLfo(), lfo2: mkLfo() });
         break;
       }
       default: break;
@@ -200,6 +215,10 @@ export default function App() {
         {tab === 'arp' && (
           <ArpPanel state={arpState}
             onChange={s => setArpState(prev => ({ ...prev, ...s }))} />
+        )}
+
+        {tab === 'lfo' && (
+          <LfoPanel patch={patch} onChange={updatePatch} />
         )}
 
         {tab === 'presets' && (

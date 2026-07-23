@@ -178,6 +178,8 @@ export class Operator {
     return (this.osc as OscillatorNode)?.frequency ?? this.oscGain.gain;
   }
 
+  getLevelParam(): AudioParam { return this.envGain.gain; }
+
   // Connect to audio output (carrier role)
   connectToOutput(dest: AudioNode) {
     this.outputGain.connect(dest);
