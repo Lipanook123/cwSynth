@@ -39,13 +39,22 @@ function buildPositions() {
 const { pos, totalW } = buildPositions();
 
 export function Keyboard() {
-  const held      = useRef(new Set<number>());
-  const touchMap  = useRef(new Map<number, number>());
-  const lastTouch = useRef(new Map<number, number>());
+  const held         = useRef(new Set<number>());
+  const touchMap     = useRef(new Map<number, number>());
+  const lastTouch    = useRef(new Map<number, number>());
+  const scrollRef    = useRef<HTMLDivElement>(null);
   const [activeNotes, setActiveNotes] = useState<ReadonlySet<number>>(new Set());
   const [slideLock, setSlideLock] = useState(false);
 
   useEffect(() => engine.addNoteListener(() => setActiveNotes(engine.getActiveNotes())), []);
+
+  // Scroll to middle C (MIDI 60) on mount
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const midCX = pos[60]?.x ?? 0;
+    el.scrollLeft = midCX - el.clientWidth / 2 + NW / 2;
+  }, []);
 
   const on  = useCallback((semi: number) => { if (held.current.has(semi)) return; held.current.add(semi); engine.noteOn(semi); }, []);
   const off = useCallback((semi: number) => { held.current.delete(semi); engine.noteOff(semi); }, []);
@@ -85,6 +94,7 @@ export function Keyboard() {
 
       {/* Keys */}
       <div
+        ref={scrollRef}
         style={{ height: NH + 16, background: 'var(--bg)', overflowX: 'auto', overflowY: 'hidden',
           touchAction: slideLock ? 'none' : 'pan-x', scrollbarWidth: 'none' }}
         onTouchMove={slideLock ? onSlideMove : undefined}
