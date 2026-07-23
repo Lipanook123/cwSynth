@@ -19,6 +19,11 @@
   --op4:    #ffaa4a;
   --op5:    #4af0a0;
   --op6:    #ff4a6b;
+  --key-nat-bg:   linear-gradient(180deg, #1a1e2c 0%, #131621 100%);
+  --key-nat-bord: #232840;
+  --key-shp-bg:   linear-gradient(180deg, #0e1018 0%, #0a0c14 100%);
+  --key-shp-bord: #0c0e16;
+  --key-label:    #2a3450;
 }
 
 /* ── Light theme ──────────────────────────────────────────── */
@@ -40,6 +45,11 @@
   --op4:    #c07800;
   --op5:    #0a9a60;
   --op6:    #cc1a30;
+  --key-nat-bg:   linear-gradient(180deg, #ffffff 0%, #f0f2f8 100%);
+  --key-nat-bord: #c8d0e4;
+  --key-shp-bg:   linear-gradient(180deg, #1a1e2c 0%, #0e1018 100%);
+  --key-shp-bord: #0c0e16;
+  --key-label:    #b0bcd4;
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
