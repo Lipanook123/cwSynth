@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { CSSProperties } from 'react';
 import { engine } from '../../engine/AudioEngine';
+import type { ScopeSource } from '../../engine/AudioEngine';
 import { Knob } from './Knob';
 
 const TIME_DIVS = [0.1, 0.2, 0.5, 1, 2, 5, 10, 20]; // ms/div
@@ -58,6 +59,7 @@ export function ScopePanel() {
   const [trigEdge,   setTrigEdge]   = useState<TrigEdge>('rise');
   const [trigMode,   setTrigMode]   = useState<TrigMode>('auto');
   const [frozen,     setFrozen]     = useState(false);
+  const [source,     setSource]     = useState<ScopeSource>('master');
   const [meas,       setMeas]       = useState<Meas>({ freq: 0, vpp: 0, rms: 0 });
 
   const canvasRef    = useRef<HTMLCanvasElement>(null);
@@ -66,8 +68,8 @@ export function ScopePanel() {
   const frameCount   = useRef(0);
 
   // All render-loop state in one ref to avoid stale closures
-  const live = useRef({ timeDivIdx, vDivIdx, yPos, coupling, trigLevel, trigEdge, trigMode, frozen });
-  live.current = { timeDivIdx, vDivIdx, yPos, coupling, trigLevel, trigEdge, trigMode, frozen };
+  const live = useRef({ timeDivIdx, vDivIdx, yPos, coupling, trigLevel, trigEdge, trigMode, frozen, source });
+  live.current = { timeDivIdx, vDivIdx, yPos, coupling, trigLevel, trigEdge, trigMode, frozen, source };
 
   const toggleFreeze = useCallback(() => setFrozen(f => !f), []);
 
@@ -87,13 +89,13 @@ export function ScopePanel() {
     setTrigMode('single');
   }, []);
 
-  // Resize canvas buffer on fftSize change (driven by timeDivIdx)
+  // Resize all analyser buffers when timebase changes
   useEffect(() => {
     const analyser = engine.getAnalyser();
     if (!analyser) return;
     const sr = analyser.context.sampleRate;
     const needed = Math.ceil(TIME_DIVS[timeDivIdx] * H_DIVS * sr / 1000);
-    analyser.fftSize = nextPow2(needed);
+    engine.setAllFftSizes(nextPow2(needed));
   }, [timeDivIdx]);
 
   // Resize observer
@@ -118,10 +120,10 @@ export function ScopePanel() {
 
     const draw = () => {
       rafRef.current = requestAnimationFrame(draw);
-      const { timeDivIdx, vDivIdx, yPos, coupling, trigLevel, trigEdge, trigMode, frozen } = live.current;
+      const { timeDivIdx, vDivIdx, yPos, coupling, trigLevel, trigEdge, trigMode, frozen, source } = live.current;
       if (frozen) return;
 
-      const analyser = engine.getAnalyser();
+      const analyser = engine.getAnalyserFor(source);
       if (!analyser) return;
 
       const buf = new Float32Array(analyser.fftSize);
@@ -206,7 +208,10 @@ export function ScopePanel() {
       const samplesPerScreen = Math.ceil(timeDivMs * H_DIVS * sr / 1000);
       const length = Math.min(samplesPerScreen, buf.length - start);
 
-      ctx.strokeStyle = acc;
+      const waveColor = source.startsWith('op')
+        ? style.getPropertyValue(`--op${source.slice(2)}`).trim() || acc
+        : acc;
+      ctx.strokeStyle = waveColor;
       ctx.lineWidth   = 1.5 * dpr;
       ctx.beginPath();
       for (let i = 0; i < length; i++) {
@@ -299,6 +304,28 @@ export function ScopePanel() {
         <span style={lbl}>rms</span>
         <span style={{ ...mono9, color: 'var(--fg)', minWidth: 56 }}>{fmtV(meas.rms)}</span>
         <span style={{ ...mono9, color: 'var(--muted)', fontSize: 8 }}>tap or F to freeze</span>
+      </div>
+
+      {/* ── Source selector ────────────────────────────────── */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0, flexWrap: 'wrap' }}>
+        <span style={lbl}>source</span>
+        <button style={btn(source === 'master')}  onClick={() => setSource('master')}>master</button>
+        <button style={btn(source === 'pre-fx')}  onClick={() => setSource('pre-fx')}>pre-fx</button>
+        <span style={{ ...lbl, marginLeft: 4 }}>op</span>
+        {([1, 2, 3, 4, 5, 6] as const).map(n => {
+          const key = `op${n}` as ScopeSource;
+          const active = source === key;
+          return (
+            <button key={n} onClick={() => setSource(key)} style={{
+              ...btn(active),
+              ...(active ? {
+                borderColor: `var(--op${n})`,
+                background:  `var(--op${n})22`,
+                color:        `var(--op${n})`,
+              } : {}),
+            }}>{n}</button>
+          );
+        })}
       </div>
 
       {/* ── Canvas ─────────────────────────────────────────── */}

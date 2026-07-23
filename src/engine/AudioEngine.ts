@@ -7,10 +7,15 @@ import { logger } from '../debug/Logger';
 const BASE_HZ = 440; // A4
 const BASE_SEMITONE = 69;
 
+export type ScopeSource = 'master' | 'pre-fx' | 'op1' | 'op2' | 'op3' | 'op4' | 'op5' | 'op6';
+
 export class AudioEngine {
   private ctx: AudioContext | null = null;
   private masterGain!: GainNode;
   private analyser!: AnalyserNode;
+  private preFxAnalyser!: AnalyserNode;
+  private opSumGains: GainNode[] = [];
+  private opAnalysers: AnalyserNode[] = [];
   private fx!: FxChain;
   private voices = new Map<number, Voice>(); // semitone → voice
   public arp: Arpeggiator;
@@ -43,6 +48,21 @@ export class AudioEngine {
     this.fx.output.connect(this.masterGain);
     this.masterGain.connect(this.analyser);
     this.analyser.connect(this.ctx.destination);
+
+    // Pre-FX tap: all voices, post-filter, before effects
+    this.preFxAnalyser = this.ctx.createAnalyser();
+    this.preFxAnalyser.fftSize = 1024;
+    this.fx.input.connect(this.preFxAnalyser);
+
+    // Per-operator sum nodes + analysers (6 ops)
+    for (let i = 0; i < 6; i++) {
+      const sum = this.ctx.createGain();
+      const analyser = this.ctx.createAnalyser();
+      analyser.fftSize = 1024;
+      sum.connect(analyser);
+      this.opSumGains.push(sum);
+      this.opAnalysers.push(analyser);
+    }
   }
 
   resume() {
@@ -76,6 +96,7 @@ export class AudioEngine {
     if (!this.ctx) { logger.error('_noteOn: no AudioContext'); return; }
     if (this.voices.has(semitone)) {
       const old = this.voices.get(semitone)!;
+      old.disconnectOperatorOutputsFrom(this.opSumGains);
       old.noteOff(this.ctx.currentTime);
       setTimeout(() => old.dispose(), 2000);
     }
@@ -84,6 +105,7 @@ export class AudioEngine {
     logger.log(`_noteOn semi=${semitone} hz=${hz.toFixed(1)}`);
     const voice = new Voice(this.ctx, this.patch, semitone, hz);
     voice.output.connect(this.fx.input);
+    voice.connectOperatorOutputsTo(this.opSumGains);
     voice.noteOn(velocity, this.ctx.currentTime);
     this.voices.set(semitone, voice);
     this.noteListeners.forEach(fn => fn());
@@ -100,14 +122,21 @@ export class AudioEngine {
     this.voices.delete(semitone);
     this.noteListeners.forEach(fn => fn());
     const maxRel = Math.max(...this.patch.operators.map(o => o.release)) + 0.5;
-    setTimeout(() => voice.dispose(), maxRel * 1000);
+    setTimeout(() => {
+      voice.disconnectOperatorOutputsFrom(this.opSumGains);
+      voice.dispose();
+    }, maxRel * 1000);
     this.onStateChange?.();
   }
 
   allNotesOff() {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;
-    this.voices.forEach(v => { v.noteOff(t); setTimeout(() => v.dispose(), 2000); });
+    this.voices.forEach(v => {
+      v.disconnectOperatorOutputsFrom(this.opSumGains);
+      v.noteOff(t);
+      setTimeout(() => v.dispose(), 2000);
+    });
     this.voices.clear();
   }
 
@@ -134,6 +163,20 @@ export class AudioEngine {
   getActiveNotes(): ReadonlySet<number> { return new Set(this.voices.keys()); }
 
   getAnalyser(): AnalyserNode | null { return this.analyser ?? null; }
+
+  getAnalyserFor(source: ScopeSource): AnalyserNode | null {
+    if (!this.ctx) return null;
+    if (source === 'master') return this.analyser ?? null;
+    if (source === 'pre-fx') return this.preFxAnalyser ?? null;
+    const idx = parseInt(source.slice(2)) - 1; // 'op1' → 0
+    return this.opAnalysers[idx] ?? null;
+  }
+
+  setAllFftSizes(size: number): void {
+    if (this.analyser) this.analyser.fftSize = size;
+    if (this.preFxAnalyser) this.preFxAnalyser.fftSize = size;
+    this.opAnalysers.forEach(a => { a.fftSize = size; });
+  }
 
   setOnStateChange(cb: () => void) { this.onStateChange = cb; }
 
