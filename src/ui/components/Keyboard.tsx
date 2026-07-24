@@ -39,9 +39,10 @@ function buildPositions() {
 const { pos, totalW } = buildPositions();
 
 export function Keyboard() {
-  const held      = useRef(new Set<number>());
-  const ptrMap    = useRef(new Map<number, number>());
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const held        = useRef(new Set<number>());
+  const ptrMap      = useRef(new Map<number, number>());
+  const dragInfoMap = useRef(new Map<number, { startX: number; startScroll: number }>());
+  const scrollRef   = useRef<HTMLDivElement>(null);
   const [activeNotes, setActiveNotes] = useState<ReadonlySet<number>>(new Set());
   const [slideLock, setSlideLock] = useState(false);
   const slideLockRef = useRef(slideLock);
@@ -63,26 +64,39 @@ export function Keyboard() {
     e.preventDefault();
     (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
     ptrMap.current.set(e.pointerId, semi);
+    dragInfoMap.current.set(e.pointerId, {
+      startX: e.clientX,
+      startScroll: scrollRef.current?.scrollLeft ?? 0,
+    });
     on(semi);
   }, [on]);
 
   const onPtrMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    if (!slideLockRef.current || !ptrMap.current.has(e.pointerId)) return;
-    const el = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
-    const semiStr = el?.closest('[data-semi]')?.getAttribute('data-semi');
-    if (!semiStr) return;
-    const newSemi = parseInt(semiStr);
-    const oldSemi = ptrMap.current.get(e.pointerId);
-    if (oldSemi !== newSemi) {
-      if (oldSemi != null) off(oldSemi);
-      on(newSemi);
-      ptrMap.current.set(e.pointerId, newSemi);
+    if (!ptrMap.current.has(e.pointerId)) return;
+    if (slideLockRef.current) {
+      // Slide mode: glide between notes
+      const el = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
+      const semiStr = el?.closest('[data-semi]')?.getAttribute('data-semi');
+      if (!semiStr) return;
+      const newSemi = parseInt(semiStr);
+      const oldSemi = ptrMap.current.get(e.pointerId);
+      if (oldSemi !== newSemi) {
+        if (oldSemi != null) off(oldSemi);
+        on(newSemi);
+        ptrMap.current.set(e.pointerId, newSemi);
+      }
+    } else {
+      // Scroll mode: drag to pan through octaves
+      const drag = dragInfoMap.current.get(e.pointerId);
+      if (!drag || !scrollRef.current) return;
+      scrollRef.current.scrollLeft = drag.startScroll - (e.clientX - drag.startX);
     }
   }, [on, off]);
 
   const onPtrUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     const s = ptrMap.current.get(e.pointerId);
     if (s != null) { off(s); ptrMap.current.delete(e.pointerId); }
+    dragInfoMap.current.delete(e.pointerId);
   }, [off]);
 
   return (

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { logger } from '../../debug/Logger';
+import type { LogEntry } from '../../debug/Logger';
 
 const BTN           = 36;
 const LONG_PRESS_MS = 400;
@@ -17,6 +18,7 @@ export const LogViewer: React.FC = () => {
   const [open, setOpen]     = useState(false);
   const [, tick]            = useState(0);
   const [filter, setFilter] = useState('');
+  const [copied, setCopied] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [pos, setPos]       = useState(defaultPos);
   const posRef              = useRef(pos);
@@ -52,6 +54,12 @@ export const LogViewer: React.FC = () => {
 
   const onDownload = useCallback(() => logger.download(), []);
   const onClear    = useCallback(() => logger.clear(), []);
+  const onCopy     = useCallback((entries: ReadonlyArray<LogEntry>) => {
+    logger.copyToClipboard(entries).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    }).catch(() => {});
+  }, []);
 
   const onPtrDown = useCallback((e: React.PointerEvent<HTMLButtonElement>) => {
     e.stopPropagation();
@@ -155,6 +163,9 @@ export const LogViewer: React.FC = () => {
               {warnCount > 0 && <span style={{ color: '#ffaa4a' }}> · {warnCount} warn</span>}
             </span>
             <div style={{ flex: 1 }} />
+            <button onClick={() => onCopy(visible)} style={btnStyle(copied ? '#4aff9e' : '#4a9eff')}>
+              {copied ? '✓ copied' : '⎘ copy'}
+            </button>
             <button onClick={onDownload} style={btnStyle('#4a9eff')}>⬇ download</button>
             <button onClick={onClear}    style={btnStyle('var(--muted)')}>✕ clear</button>
             <button onClick={() => setOpen(false)} style={btnStyle('var(--muted)')}>✕ close</button>

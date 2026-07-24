@@ -1,6 +1,6 @@
 type Level = 'log' | 'warn' | 'error' | 'info';
 
-interface LogEntry {
+export interface LogEntry {
   t: number;       // ms since logger init
   level: Level;
   msg: string;
@@ -46,13 +46,17 @@ class Logger {
 
   getEntries() { return this.entries as ReadonlyArray<LogEntry>; }
 
-  asText() {
-    return this.entries
+  asText(entries?: ReadonlyArray<LogEntry>) {
+    return (entries ?? this.entries)
       .map(e => {
         const ts = String(e.t).padStart(7, ' ');
         return `+${ts}ms [${e.level.toUpperCase().padEnd(5)}] ${e.msg}`;
       })
       .join('\n');
+  }
+
+  async copyToClipboard(entries?: ReadonlyArray<LogEntry>) {
+    await navigator.clipboard.writeText(this.asText(entries));
   }
 
   download() {
