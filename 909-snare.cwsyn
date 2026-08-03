@@ -1,12 +1,19 @@
 {
   "name": "909 Snare",
   "author": "CW Synth",
-  "tags": ["drum", "snare", "909", "percussion"],
-  "version": 1,
+  "tags": [
+    "drum",
+    "snare",
+    "909",
+    "percussion"
+  ],
+  "version": 2,
   "algorithm": 5,
+  "routes": null,
   "operators": [
     {
       "enabled": true,
+      "role": "fm",
       "wave": "sine",
       "wavetableData": null,
       "ratio": 0.5,
@@ -15,49 +22,115 @@
       "fixedFreq": 185,
       "level": 0.9,
       "feedback": 0.08,
-      "attack": 0.001,
-      "decay": 0.12,
-      "sustain": 0.0,
-      "release": 0.08,
+      "env": {
+        "stages": [
+          {
+            "time": 0.001,
+            "level": 1,
+            "curve": "lin"
+          },
+          {
+            "time": 0.12,
+            "level": 0,
+            "curve": "exp"
+          }
+        ],
+        "sustainStage": 1,
+        "release": [
+          {
+            "time": 0.08,
+            "level": 0,
+            "curve": "exp"
+          }
+        ],
+        "velSens": 0,
+        "keyRateScale": 0,
+        "keyLevelScale": 0
+      },
       "karplusStrong": false,
       "ksDecay": 0.995
     },
     {
       "enabled": true,
+      "role": "fm",
       "wave": "sine",
       "wavetableData": null,
-      "ratio": 1.0,
+      "ratio": 1,
       "fine": 0,
       "fixed": true,
       "fixedFreq": 330,
       "level": 0.75,
-      "feedback": 0.0,
-      "attack": 0.001,
-      "decay": 0.04,
-      "sustain": 0.0,
-      "release": 0.03,
+      "feedback": 0,
+      "env": {
+        "stages": [
+          {
+            "time": 0.001,
+            "level": 1,
+            "curve": "lin"
+          },
+          {
+            "time": 0.04,
+            "level": 0,
+            "curve": "exp"
+          }
+        ],
+        "sustainStage": 1,
+        "release": [
+          {
+            "time": 0.03,
+            "level": 0,
+            "curve": "exp"
+          }
+        ],
+        "velSens": 0,
+        "keyRateScale": 0,
+        "keyLevelScale": 0
+      },
       "karplusStrong": false,
       "ksDecay": 0.995
     },
     {
       "enabled": true,
+      "role": "fm",
       "wave": "square",
       "wavetableData": null,
-      "ratio": 1.0,
+      "ratio": 1,
       "fine": 0,
       "fixed": true,
       "fixedFreq": 220,
       "level": 0.55,
-      "feedback": 0.0,
-      "attack": 0.001,
-      "decay": 0.18,
-      "sustain": 0.0,
-      "release": 0.12,
+      "feedback": 0,
+      "env": {
+        "stages": [
+          {
+            "time": 0.001,
+            "level": 1,
+            "curve": "lin"
+          },
+          {
+            "time": 0.18,
+            "level": 0,
+            "curve": "exp"
+          }
+        ],
+        "sustainStage": 1,
+        "release": [
+          {
+            "time": 0.12,
+            "level": 0,
+            "curve": "exp"
+          }
+        ],
+        "velSens": 0,
+        "keyRateScale": 0,
+        "keyLevelScale": 0
+      },
       "karplusStrong": true,
       "ksDecay": 0.92
     },
     {
       "enabled": true,
+      "role": "fm",
       "wave": "sine",
       "wavetableData": null,
       "ratio": 0.5,
@@ -66,15 +139,37 @@
       "fixedFreq": 175,
       "level": 0.6,
       "feedback": 0.04,
-      "attack": 0.001,
-      "decay": 0.09,
-      "sustain": 0.0,
-      "release": 0.06,
+      "env": {
+        "stages": [
+          {
+            "time": 0.001,
+            "level": 1,
+            "curve": "lin"
+          },
+          {
+            "time": 0.09,
+            "level": 0,
+            "curve": "exp"
+          }
+        ],
+        "sustainStage": 1,
+        "release": [
+          {
+            "time": 0.06,
+            "level": 0,
+            "curve": "exp"
+          }
+        ],
+        "velSens": 0,
+        "keyRateScale": 0,
+        "keyLevelScale": 0
+      },
       "karplusStrong": false,
       "ksDecay": 0.995
     },
     {
       "enabled": false,
+      "role": "fm",
       "wave": "sine",
       "wavetableData": null,
       "ratio": 1,
@@ -83,15 +178,37 @@
       "fixedFreq": 440,
       "level": 0.5,
       "feedback": 0,
-      "attack": 0.01,
-      "decay": 0.3,
-      "sustain": 0.5,
-      "release": 0.3,
+      "env": {
+        "stages": [
+          {
+            "time": 0.01,
+            "level": 1,
+            "curve": "lin"
+          },
+          {
+            "time": 0.3,
+            "level": 0.5,
+            "curve": "exp"
+          }
+        ],
+        "sustainStage": 1,
+        "release": [
+          {
+            "time": 0.3,
+            "level": 0,
+            "curve": "exp"
+          }
+        ],
+        "velSens": 0,
+        "keyRateScale": 0,
+        "keyLevelScale": 0
+      },
       "karplusStrong": false,
       "ksDecay": 0.995
     },
     {
       "enabled": false,
+      "role": "fm",
       "wave": "sine",
       "wavetableData": null,
       "ratio": 1,
@@ -100,10 +217,31 @@
       "fixedFreq": 440,
       "level": 0.5,
       "feedback": 0,
-      "attack": 0.01,
-      "decay": 0.3,
-      "sustain": 0.5,
-      "release": 0.3,
+      "env": {
+        "stages": [
+          {
+            "time": 0.01,
+            "level": 1,
+            "curve": "lin"
+          },
+          {
+            "time": 0.3,
+            "level": 0.5,
+            "curve": "exp"
+          }
+        ],
+        "sustainStage": 1,
+        "release": [
+          {
+            "time": 0.3,
+            "level": 0,
+            "curve": "exp"
+          }
+        ],
+        "velSens": 0,
+        "keyRateScale": 0,
+        "keyLevelScale": 0
+      },
       "karplusStrong": false,
       "ksDecay": 0.995
     }
@@ -113,26 +251,49 @@
     "type": "highpass",
     "cutoff": 120,
     "resonance": 1.8,
-    "envAmount": 0.0,
-    "attack": 0.001,
-    "decay": 0.1,
-    "sustain": 0.0,
-    "release": 0.1,
-    "keytrack": 0.0
+    "envAmount": 0,
+    "env": {
+      "stages": [
+        {
+          "time": 0.001,
+          "level": 1,
+          "curve": "lin"
+        },
+        {
+          "time": 0.1,
+          "level": 0,
+          "curve": "exp"
+        }
+      ],
+      "sustainStage": 1,
+      "release": [
+        {
+          "time": 0.1,
+          "level": 0,
+          "curve": "exp"
+        }
+      ],
+      "velSens": 0,
+      "keyRateScale": 0,
+      "keyLevelScale": 0
+    },
+    "keytrack": 0
   },
   "lfo1": {
     "shape": "sine",
     "rate": 5,
-    "depth": 0.0,
-    "delay": 0.0,
-    "sync": true
+    "depth": 0,
+    "delay": 0,
+    "sync": true,
+    "swing": 0
   },
   "lfo2": {
     "shape": "sine",
     "rate": 0.3,
-    "depth": 0.0,
-    "delay": 0.0,
-    "sync": false
+    "depth": 0,
+    "delay": 0,
+    "sync": false,
+    "swing": 0
   },
   "modMatrix": [],
   "fx": {
@@ -153,7 +314,7 @@
       "enabled": false,
       "rate": 0.5,
       "depth": 0.2,
-      "mix": 0.0
+      "mix": 0
     },
     "dist": {
       "enabled": true,
@@ -169,6 +330,13 @@
       "high": 4,
       "midFreq": 3500
     }
+  },
+  "polyphony": 16,
+  "glide": 0,
+  "unison": {
+    "voices": 1,
+    "detune": 8,
+    "spread": 0.5
   },
   "pitchBend": 2,
   "transpose": 0,

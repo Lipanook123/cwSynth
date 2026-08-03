@@ -38,8 +38,14 @@ export class FxChain {
   private eqMid: BiquadFilterNode;
   private eqHigh: BiquadFilterNode;
 
+  // Last IR parameters, so update() only regenerates when they change.
+  private lastReverbSize: number;
+  private lastReverbDamp: number;
+
   constructor(ctx: AudioContext, params: FxParams) {
     this.ctx = ctx;
+    this.lastReverbSize = params.reverb.size;
+    this.lastReverbDamp = params.reverb.damp;
 
     this.input  = ctx.createGain();
     this.output = ctx.createGain();
@@ -134,11 +140,26 @@ export class FxChain {
     this.input.connect(this.eqLow);
   }
 
+  /** Wet-mix params for the global fx_* mod-matrix destinations. */
+  getWetParam(which: 'reverb' | 'delay' | 'chorus'): AudioParam {
+    if (which === 'reverb') return this.reverbWet.gain;
+    if (which === 'delay')  return this.delayWet.gain;
+    return this.chorusWet.gain;
+  }
+
   update(params: FxParams) {
     const t = this.ctx.currentTime;
     const { reverb, delay, chorus, dist, eq } = params;
 
-    // Reverb
+    // Reverb. The IR is only rebuilt when size or damp actually change —
+    // generating it is expensive, and update() runs on every patch edit. This
+    // used to be omitted entirely, so size/damp were frozen at whatever patch
+    // happened to be loaded when the AudioContext opened.
+    if (reverb.size !== this.lastReverbSize || reverb.damp !== this.lastReverbDamp) {
+      this.lastReverbSize = reverb.size;
+      this.lastReverbDamp = reverb.damp;
+      this.reverbConv.buffer = this._buildIR(reverb.size, reverb.damp);
+    }
     this.reverbDry.gain.setValueAtTime(1 - reverb.mix * +reverb.enabled, t);
     this.reverbWet.gain.setValueAtTime(reverb.mix * +reverb.enabled, t);
 

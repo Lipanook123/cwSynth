@@ -57,18 +57,36 @@ export function Keyboard() {
     el.scrollLeft = midCX - el.clientWidth / 2 + NW / 2;
   }, []);
 
-  const on  = useCallback((semi: number) => { if (held.current.has(semi)) return; held.current.add(semi); engine.noteOn(semi); }, []);
+  const on  = useCallback((semi: number, velocity = 0.8) => {
+    if (held.current.has(semi)) return;
+    held.current.add(semi);
+    engine.noteOn(semi, velocity);
+  }, []);
   const off = useCallback((semi: number) => { held.current.delete(semi); engine.noteOff(semi); }, []);
+
+  /**
+   * Velocity from where the key was struck: near the top (pivot) is soft, near
+   * the bottom is hard, mirroring how a weighted key responds. Pressure-capable
+   * pointers use their own reading instead.
+   */
+  const velocityFrom = (e: React.PointerEvent<HTMLDivElement>): number => {
+    if (e.pointerType === 'pen' && e.pressure > 0) return 0.25 + e.pressure * 0.75;
+    const r = e.currentTarget.getBoundingClientRect();
+    if (!r.height) return 0.8;
+    const frac = Math.min(1, Math.max(0, (e.clientY - r.top) / r.height));
+    return 0.35 + frac * 0.65;
+  };
 
   const onPtrDown = useCallback((semi: number, e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
+    const velocity = velocityFrom(e);
     (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
     ptrMap.current.set(e.pointerId, semi);
     dragInfoMap.current.set(e.pointerId, {
       startX: e.clientX,
       startScroll: scrollRef.current?.scrollLeft ?? 0,
     });
-    on(semi);
+    on(semi, velocity);
   }, [on]);
 
   const onPtrMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {

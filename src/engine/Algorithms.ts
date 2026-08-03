@@ -3,6 +3,13 @@
 //   carriers: operator indices that connect to audio output
 //   modulators: [target, source][] — source modulates target's frequency
 // Operators indexed 0-5 (OP1-OP6)
+//
+// These 32 entries are the *data source* for the general routing matrix — see
+// expandAlgorithm() at the bottom of this file. Voice consumes Route[], never
+// AlgorithmDef directly, so custom routings, ring-mod and osc sync all have a
+// home without touching the algorithm picker UI.
+
+import type { Route } from './Types';
 
 export interface AlgorithmDef {
   id: number;
@@ -77,3 +84,32 @@ export const ALGORITHMS: AlgorithmDef[] = [
   // 32: (6→5→4→3+2→1)
   { id: 32, carriers: [0], modulators: [[1,2],[1,3],[0,1],[3,4],[4,5]], label: '(6→5→4→3+2→1)' },
 ];
+
+export function getAlgorithm(id: number): AlgorithmDef {
+  return ALGORITHMS.find(a => a.id === id) ?? ALGORITHMS[0];
+}
+
+/**
+ * Expand a DX-style algorithm into the general routing matrix.
+ *
+ * Carriers become 'mix' routes to the voice output; modulator pairs become 'fm'
+ * routes. `amount` is 1 here — per-operator depth comes from the operator's own
+ * level, which Voice converts to an FM index.
+ */
+export function expandAlgorithm(id: number): Route[] {
+  const algo = getAlgorithm(id);
+  const routes: Route[] = [];
+
+  for (const [target, source] of algo.modulators) {
+    routes.push({ from: source, to: target, kind: 'fm', amount: 1 });
+  }
+  for (const carrier of algo.carriers) {
+    routes.push({ from: carrier, to: 'out', kind: 'mix', amount: 1 });
+  }
+  return routes;
+}
+
+/** Operators that reach the output directly, derived from any routing matrix. */
+export function carriersOf(routes: Route[]): number[] {
+  return routes.filter(r => r.to === 'out').map(r => r.from);
+}

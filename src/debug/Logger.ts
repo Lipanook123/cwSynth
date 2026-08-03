@@ -28,8 +28,15 @@ class Logger {
   warn (...args: unknown[]) { this._push('warn',  args); }
   error(...args: unknown[]) { this._push('error', args); }
 
-  /** Intercept window errors and unhandled rejections */
+  /**
+   * Intercept window errors and unhandled rejections.
+   *
+   * No-ops when there is no `window` — this runs at module load, and the engine
+   * modules that import the logger are otherwise perfectly usable outside a
+   * browser (unit tests, and any future offline render).
+   */
   install() {
+    if (typeof window === 'undefined') return this;
     window.addEventListener('error', e => {
       this.error(`[uncaught] ${e.message} @ ${e.filename}:${e.lineno}`);
     });
