@@ -1,0 +1,221 @@
+// Reference patches for the classic analog synths.
+//
+// These are the acceptance test for the Phase 2a DSP: if the ladder filter,
+// PolyBLEP oscillator, PWM and hard sync are right, these sound close to their
+// namesakes. If something is wrong they expose it immediately.
+//
+// All use `role: 'vco'` (the worklet oscillator) and `filter.model: 'ladder'` or
+// 'svf'. Algorithm 16 is the fully additive topology — every operator straight
+// to the output — which is what a subtractive synth's oscillator mixer is.
+
+import type { PatchParams, OperatorParams, FilterParams } from '../engine/Types';
+import { DEFAULT_PATCH, DEFAULT_OPERATOR, DEFAULT_FILTER } from '../engine/Types';
+import { adsrToEnv } from '../engine/Envelope';
+
+/** VCO shorthand. `level` is amplitude here — additive routing means no operator modulates another. */
+function vco(over: Partial<OperatorParams> & { a?: number; d?: number; s?: number; r?: number } = {}): OperatorParams {
+  const { a = 0.005, d = 0.3, s = 0.8, r = 0.3, ...rest } = over;
+  return {
+    ...DEFAULT_OPERATOR,
+    role: 'vco',
+    wave: 'sawtooth',
+    env: adsrToEnv(a, d, s, r, { velSens: 0.5 }),
+    drift: 0.25,
+    ...rest,
+  };
+}
+
+const OFF: OperatorParams = {
+  ...DEFAULT_OPERATOR, enabled: false, env: adsrToEnv(0.01, 0.3, 0.5, 0.1),
+};
+
+function filt(over: Partial<FilterParams> & { a?: number; d?: number; s?: number; r?: number }): FilterParams {
+  const { a = 0.01, d = 0.4, s = 0.4, r = 0.3, ...rest } = over;
+  return { ...DEFAULT_FILTER, enabled: true, env: adsrToEnv(a, d, s, r), ...rest };
+}
+
+// ── Minimoog ───────────────────────────────────────────────────────────────
+// Three oscillators, the second and third detuned, into a 24 dB ladder driven
+// hard. The bass is the sound the ladder exists for: high resonance, low cutoff,
+// and a fast filter envelope.
+
+const MINIMOOG_BASS: PatchParams = {
+  ...DEFAULT_PATCH,
+  name: 'Minimoog Bass', author: 'CW Synth', tags: ['bass', 'analog', 'moog'],
+  algorithm: 16,
+  operators: [
+    vco({ ratio: 1, level: 0.9, a: 0.002, d: 0.4, s: 0.7, r: 0.15 }),
+    vco({ ratio: 1, fine: -7, level: 0.8, a: 0.002, d: 0.4, s: 0.7, r: 0.15 }),
+    // Sub-octave pulse for weight underneath.
+    vco({ ratio: 0.5, wave: 'square', pulseWidth: 0.5, level: 0.7, a: 0.002, d: 0.4, s: 0.7, r: 0.15 }),
+    OFF, OFF, OFF,
+  ],
+  filter: filt({
+    model: 'ladder', type: 'lowpass', slope: 24,
+    cutoff: 260, resonance: 19, drive: 0.45,
+    envAmount: 0.55, keytrack: 0.35,
+    a: 0.002, d: 0.22, s: 0.12, r: 0.2,
+  }),
+  polyphony: 6,
+  volume: 0.75,
+};
+
+const MINIMOOG_LEAD: PatchParams = {
+  ...DEFAULT_PATCH,
+  name: 'Minimoog Lead', author: 'CW Synth', tags: ['lead', 'analog', 'moog'],
+  algorithm: 16,
+  operators: [
+    vco({ ratio: 1, level: 0.85, a: 0.01, d: 0.3, s: 0.85, r: 0.25 }),
+    vco({ ratio: 1, fine: 12, level: 0.75, a: 0.01, d: 0.3, s: 0.85, r: 0.25 }),
+    vco({ ratio: 2, fine: -5, wave: 'square', pulseWidth: 0.35, level: 0.5, a: 0.01, d: 0.3, s: 0.8, r: 0.25 }),
+    OFF, OFF, OFF,
+  ],
+  filter: filt({
+    model: 'ladder', type: 'lowpass', slope: 24,
+    cutoff: 900, resonance: 21, drive: 0.35,
+    envAmount: 0.4, keytrack: 0.5,
+    a: 0.01, d: 0.5, s: 0.5, r: 0.3,
+  }),
+  lfo1: { shape: 'sine', rate: 5.5, depth: 0.25, delay: 0.6, sync: true, swing: 0 },
+  modMatrix: [{ source: 'lfo1', dest: 'pitch', amount: 0.25, enabled: true }],
+  fx: {
+    ...DEFAULT_PATCH.fx,
+    reverb: { enabled: true, size: 0.4, damp: 0.5, mix: 0.16 },
+    delay: { enabled: true, time: 0.32, feedback: 0.28, mix: 0.14, sync: false },
+  },
+  polyphony: 4,
+  volume: 0.7,
+};
+
+// ── Jupiter-8 ──────────────────────────────────────────────────────────────
+// Two oscillators through a series highpass into a 24 dB lowpass — the JP-8
+// topology. The brass patch leans on the filter envelope; the pad leans on PWM.
+
+const JP8_BRASS: PatchParams = {
+  ...DEFAULT_PATCH,
+  name: 'Jupiter Brass', author: 'CW Synth', tags: ['brass', 'analog', 'roland'],
+  algorithm: 16,
+  operators: [
+    vco({ ratio: 1, level: 0.85, a: 0.03, d: 0.5, s: 0.75, r: 0.3 }),
+    vco({ ratio: 1, fine: 9, wave: 'square', pulseWidth: 0.42, level: 0.7, a: 0.03, d: 0.5, s: 0.75, r: 0.3 }),
+    OFF, OFF, OFF, OFF,
+  ],
+  filter: filt({
+    model: 'ladder', type: 'lowpass', slope: 24,
+    cutoff: 700, resonance: 9, drive: 0.2,
+    hpfCutoff: 90,               // the JP-8's series highpass, thinning the low end
+    envAmount: 0.5, keytrack: 0.45,
+    a: 0.04, d: 0.6, s: 0.55, r: 0.35,
+  }),
+  // Slow PWM is most of what makes a Jupiter pad move.
+  lfo1: { shape: 'triangle', rate: 0.6, depth: 0.5, delay: 0, sync: false, swing: 0 },
+  fx: {
+    ...DEFAULT_PATCH.fx,
+    chorus: { enabled: true, rate: 0.5, depth: 0.35, mix: 0.4 },
+    reverb: { enabled: true, size: 0.5, damp: 0.45, mix: 0.2 },
+  },
+  polyphony: 8,
+  volume: 0.7,
+};
+
+const JP8_PAD: PatchParams = {
+  ...DEFAULT_PATCH,
+  name: 'Jupiter Pad', author: 'CW Synth', tags: ['pad', 'analog', 'roland'],
+  algorithm: 16,
+  operators: [
+    vco({ ratio: 1, wave: 'square', pulseWidth: 0.5, level: 0.75, a: 0.5, d: 1.2, s: 0.85, r: 1.4, drift: 0.4 }),
+    vco({ ratio: 1, fine: -11, wave: 'square', pulseWidth: 0.45, level: 0.7, a: 0.6, d: 1.2, s: 0.85, r: 1.6, drift: 0.4 }),
+    vco({ ratio: 2, fine: 6, level: 0.35, a: 0.8, d: 1.5, s: 0.7, r: 1.8, drift: 0.3 }),
+    OFF, OFF, OFF,
+  ],
+  filter: filt({
+    model: 'svf', type: 'lowpass', slope: 24,
+    cutoff: 1400, resonance: 7, drive: 0.1,
+    hpfCutoff: 60,
+    envAmount: 0.3, keytrack: 0.4,
+    a: 0.9, d: 1.5, s: 0.6, r: 1.6,
+  }),
+  lfo1: { shape: 'triangle', rate: 0.35, depth: 0.4, delay: 0.4, sync: false, swing: 0 },
+  modMatrix: [{ source: 'lfo1', dest: 'filter_cutoff', amount: 0.25, enabled: true }],
+  fx: {
+    ...DEFAULT_PATCH.fx,
+    chorus: { enabled: true, rate: 0.32, depth: 0.5, mix: 0.45 },
+    reverb: { enabled: true, size: 0.8, damp: 0.35, mix: 0.35 },
+  },
+  polyphony: 8,
+  volume: 0.62,
+};
+
+// ── OB-Xa ──────────────────────────────────────────────────────────────────
+// The Oberheim sound is a 2-pole state-variable filter and heavy detuning.
+
+const OBXA_PAD: PatchParams = {
+  ...DEFAULT_PATCH,
+  name: 'OB-Xa Pad', author: 'CW Synth', tags: ['pad', 'analog', 'oberheim'],
+  algorithm: 16,
+  operators: [
+    vco({ ratio: 1, level: 0.8, a: 0.35, d: 1.0, s: 0.9, r: 1.2, drift: 0.5 }),
+    vco({ ratio: 1, fine: -14, level: 0.75, a: 0.4, d: 1.0, s: 0.9, r: 1.3, drift: 0.5 }),
+    vco({ ratio: 1, fine: 15, wave: 'square', pulseWidth: 0.4, level: 0.55, a: 0.45, d: 1.1, s: 0.85, r: 1.3, drift: 0.5 }),
+    OFF, OFF, OFF,
+  ],
+  filter: filt({
+    // 2-pole SVF: the softer, more open Oberheim character.
+    model: 'svf', type: 'lowpass', slope: 12,
+    cutoff: 1100, resonance: 11, drive: 0.15,
+    envAmount: 0.45, keytrack: 0.4,
+    a: 0.5, d: 1.2, s: 0.55, r: 1.2,
+  }),
+  lfo1: { shape: 'sine', rate: 0.45, depth: 0.35, delay: 0.8, sync: false, swing: 0 },
+  modMatrix: [{ source: 'lfo1', dest: 'filter_cutoff', amount: 0.2, enabled: true }],
+  fx: {
+    ...DEFAULT_PATCH.fx,
+    chorus: { enabled: true, rate: 0.28, depth: 0.55, mix: 0.5 },
+    reverb: { enabled: true, size: 0.75, damp: 0.4, mix: 0.3 },
+  },
+  polyphony: 8,
+  volume: 0.62,
+};
+
+// ── Hard sync demo ─────────────────────────────────────────────────────────
+// Explicit `routes` rather than an algorithm: op1 syncs op2, and only op2 is
+// heard. Sweeping op2's ratio gives the classic sync sweep.
+
+const SYNC_LEAD: PatchParams = {
+  ...DEFAULT_PATCH,
+  name: 'Sync Lead', author: 'CW Synth', tags: ['lead', 'sync', 'analog'],
+  algorithm: 16,
+  routes: [
+    { from: 0, to: 1, kind: 'sync', amount: 1 },
+    { from: 1, to: 'out', kind: 'mix', amount: 1 },
+  ],
+  operators: [
+    // Master: sets the pitch you hear. Not routed to the output itself.
+    vco({ ratio: 1, level: 0.9, a: 0.005, d: 0.3, s: 0.9, r: 0.2 }),
+    // Slave: restarted every master cycle, so its ratio sets timbre, not pitch.
+    vco({ ratio: 2.8, level: 0.9, a: 0.005, d: 0.3, s: 0.9, r: 0.2 }),
+    OFF, OFF, OFF, OFF,
+  ],
+  filter: filt({
+    model: 'ladder', type: 'lowpass', slope: 24,
+    cutoff: 3500, resonance: 6, drive: 0.3,
+    envAmount: 0.3, keytrack: 0.4,
+    a: 0.005, d: 0.4, s: 0.6, r: 0.25,
+  }),
+  fx: {
+    ...DEFAULT_PATCH.fx,
+    delay: { enabled: true, time: 0.28, feedback: 0.3, mix: 0.16, sync: false },
+    reverb: { enabled: true, size: 0.45, damp: 0.5, mix: 0.18 },
+  },
+  polyphony: 4,
+  volume: 0.65,
+};
+
+export const ANALOG_PRESETS = [
+  { id: 'minimoog-bass', name: 'Minimoog Bass', author: 'CW Synth', tags: ['bass', 'analog'],  patch: MINIMOOG_BASS },
+  { id: 'minimoog-lead', name: 'Minimoog Lead', author: 'CW Synth', tags: ['lead', 'analog'],  patch: MINIMOOG_LEAD },
+  { id: 'jp8-brass',     name: 'Jupiter Brass', author: 'CW Synth', tags: ['brass', 'analog'], patch: JP8_BRASS },
+  { id: 'jp8-pad',       name: 'Jupiter Pad',   author: 'CW Synth', tags: ['pad', 'analog'],   patch: JP8_PAD },
+  { id: 'obxa-pad',      name: 'OB-Xa Pad',     author: 'CW Synth', tags: ['pad', 'analog'],   patch: OBXA_PAD },
+  { id: 'sync-lead',     name: 'Sync Lead',     author: 'CW Synth', tags: ['lead', 'sync'],    patch: SYNC_LEAD },
+];

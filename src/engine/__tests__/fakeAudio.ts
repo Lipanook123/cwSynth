@@ -43,6 +43,37 @@ export class FakeConstant extends FakeNode { offset = new FakeParam(1, 'offset')
 export class FakeBufferSource extends FakeNode { buffer: unknown = null; start() {} stop() {} }
 export class FakeConvolver extends FakeNode { buffer: unknown = null; }
 export class FakeWaveShaper extends FakeNode { curve: unknown = null; oversample = 'none'; }
+/**
+ * Stand-in for AudioWorkletNode. `parameters` is a Map of FakeParams, mirroring
+ * the real API — which is what lets the engine treat a worklet's cutoff exactly
+ * like a BiquadFilterNode's frequency.
+ */
+export class FakeAudioWorkletNode extends FakeNode {
+  readonly parameters: Map<string, FakeParam>;
+  readonly port = {
+    postMessage: () => {},
+    onmessage: null as ((e: MessageEvent) => void) | null,
+    close: () => {},
+  };
+  constructor(_ctx: unknown, public processorName: string) {
+    super();
+    // Superset of the params both processors declare; unknown reads are
+    // harmless and a missing one would throw exactly as it would in a browser.
+    this.parameters = new Map([
+      ['cutoff', new FakeParam(2000, 'cutoff')],
+      ['resonance', new FakeParam(0, 'resonance')],
+      ['drive', new FakeParam(0, 'drive')],
+      ['model', new FakeParam(0, 'model')],
+      ['mode', new FakeParam(0, 'mode')],
+      ['slope', new FakeParam(24, 'slope')],
+      ['frequency', new FakeParam(440, 'frequency')],
+      ['pulseWidth', new FakeParam(0.5, 'pulseWidth')],
+      ['shape', new FakeParam(0, 'shape')],
+      ['drift', new FakeParam(0, 'drift')],
+    ]);
+  }
+}
+
 export class FakeAnalyser extends FakeNode {
   fftSize = 1024;
   frequencyBinCount = 512;
@@ -55,6 +86,13 @@ export class FakeAudioContext {
   sampleRate = 48000;
   state: AudioContextState = 'running';
   destination = new FakeNode();
+
+  /** Set false to simulate a browser without AudioWorklet, exercising fallbacks. */
+  static workletSupport = true;
+
+  audioWorklet = FakeAudioContext.workletSupport
+    ? { addModule: () => Promise.resolve() }
+    : undefined;
 
   createGain() { return new FakeGain(); }
   createOscillator() { return new FakeOsc(); }
@@ -74,12 +112,21 @@ export class FakeAudioContext {
   close() { this.state = 'closed'; return Promise.resolve(); }
 }
 
-/** Install the fake as the global AudioContext. Returns a restore function. */
-export function installFakeAudio(): () => void {
+/**
+ * Install the fake as the global AudioContext and AudioWorkletNode.
+ * Returns a restore function.
+ */
+export function installFakeAudio(opts: { worklets?: boolean } = {}): () => void {
   const g = globalThis as Record<string, unknown>;
-  const prev = g.AudioContext;
+  const prevCtx = g.AudioContext;
+  const prevNode = g.AudioWorkletNode;
+  FakeAudioContext.workletSupport = opts.worklets !== false;
   g.AudioContext = FakeAudioContext;
-  return () => { g.AudioContext = prev; };
+  g.AudioWorkletNode = FakeAudioWorkletNode;
+  return () => {
+    g.AudioContext = prevCtx;
+    g.AudioWorkletNode = prevNode;
+  };
 }
 
 export const makeCtx = () => new FakeAudioContext() as unknown as AudioContext;

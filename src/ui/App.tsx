@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { engine } from '../engine/AudioEngine';
 import { useEngine } from './hooks/useEngine';
 import { useKeyboard } from './hooks/useKeyboard';
 import { OperatorPanel } from './components/OperatorPanel';
@@ -63,6 +64,13 @@ export default function App() {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('cw_theme', theme);
   }, [theme]);
+
+  // Load the analog worklets on mount rather than on the first key press.
+  // addModule is async but noteOn is not, so without this the first note after
+  // page load would silently fall back to stock oscillators and a plain biquad.
+  // Creating the AudioContext here is safe — it starts suspended, and only
+  // producing sound needs a user gesture.
+  useEffect(() => { void engine.preload(); }, []);
 
   // During multi-touch, browsers suppress synthesised click events for
   // non-primary pointers. Detect secondary pointer taps and synthesise

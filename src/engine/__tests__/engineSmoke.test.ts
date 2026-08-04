@@ -41,10 +41,20 @@ describe('engine smoke', () => {
     expect(() => playThrough(normalisePatch({}))).not.toThrow();
   });
 
-  it.each(['init', 'whistle', 'ep', 'bell', 'bass'])('plays factory preset %s', id => {
-    const preset = FACTORY.find(p => p.id === id)!;
-    expect(preset).toBeDefined();
-    expect(() => playThrough(preset.patch)).not.toThrow();
+  it('ships the FM and analog factory presets', () => {
+    const ids = FACTORY.map(p => p.id);
+    expect(ids).toEqual(expect.arrayContaining(['init', 'whistle', 'ep', 'bell', 'bass']));
+    expect(ids).toEqual(expect.arrayContaining([
+      'minimoog-bass', 'minimoog-lead', 'jp8-brass', 'jp8-pad', 'obxa-pad', 'sync-lead',
+    ]));
+  });
+
+  // Iterate the real list rather than a hardcoded one, so a new preset is
+  // covered the moment it is registered.
+  it('plays every factory preset', () => {
+    for (const preset of FACTORY) {
+      expect(() => playThrough(preset.patch), preset.id).not.toThrow();
+    }
   });
 
   const files = [

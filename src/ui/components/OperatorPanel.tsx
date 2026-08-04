@@ -1,5 +1,5 @@
 import React from 'react';
-import type { OperatorParams, WaveType } from '../../engine/Types';
+import type { OperatorParams, WaveType, OpRole } from '../../engine/Types';
 import { Knob } from './Knob';
 import { AdsrKnobs, toggleEnvShape, isAdsrShaped } from './AdsrKnobs';
 import { levelToIndex } from '../../engine/Operator';
@@ -9,6 +9,17 @@ import type { RandomMode } from '../../engine/Randomiser';
 const OP_COLORS = ['#4a9eff','#7b6fff','#ff6b9d','#ffaa4a','#4af0a0','#ff4a6b'];
 const WAVES: WaveType[] = ['sine','triangle','sawtooth','square'];
 const WAVE_LABELS = ['sin','tri','saw','sq'];
+
+// The worklet oscillator leads with saw and pulse — the analog staples — and its
+// square is a pulse at 50%, so pulse width is always live.
+const VCO_WAVES: WaveType[] = ['sawtooth','square','triangle','sine'];
+const VCO_WAVE_LABELS = ['saw','pulse','tri','sin'];
+
+const ROLES: { id: OpRole; label: string; hint: string }[] = [
+  { id: 'fm',    label: 'fm',    hint: 'Clean band-limited oscillator — the DX-7 operator' },
+  { id: 'vco',   label: 'vco',   hint: 'Analog oscillator — pulse width, hard sync, drift' },
+  { id: 'noise', label: 'noise', hint: 'White or pink noise source' },
+];
 
 interface Props {
   index: number;
@@ -62,18 +73,49 @@ export const OperatorPanel: React.FC<Props> = ({ index, params, isCarrier, onCha
         </button>
       </div>
 
-      {/* Waveform */}
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:3 }}>
-        {WAVES.map((w, i) => (
-          <button key={w} onClick={() => onChange({ wave: w, karplusStrong: false })}
+      {/* Operator role. `fm` is a clean band-limited oscillator; `vco` is the
+          worklet analog oscillator with PWM and hard sync; `noise` is a source. */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:3 }}>
+        {ROLES.map(r => (
+          <button key={r.id} onClick={() => onChange({ role: r.id, karplusStrong: false })}
+            title={r.hint}
             style={{
-              padding:'5px 0', borderRadius:3, border:'1px solid var(--bord)',
-              background: params.wave === w && !params.karplusStrong ? col : 'none',
-              color: params.wave === w && !params.karplusStrong ? 'var(--bg)' : 'var(--muted)',
+              padding:'5px 0', borderRadius:3,
+              border:`1px solid ${params.role === r.id ? col : 'var(--bord)'}`,
+              background: params.role === r.id ? col + '22' : 'none',
+              color: params.role === r.id ? col : 'var(--muted)',
               fontFamily:'IBM Plex Mono', fontSize:8, cursor:'pointer', transition:'all .1s',
-            }}>{WAVE_LABELS[i]}</button>
+            }}>{r.label}</button>
         ))}
       </div>
+
+      {/* Waveform */}
+      {params.role === 'noise' ? (
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:3 }}>
+          {(['white','pink'] as const).map(n => (
+            <button key={n} onClick={() => onChange({ noiseType: n })}
+              style={{
+                padding:'5px 0', borderRadius:3,
+                border:`1px solid ${params.noiseType === n ? col : 'var(--bord)'}`,
+                background: params.noiseType === n ? col + '22' : 'none',
+                color: params.noiseType === n ? col : 'var(--muted)',
+                fontFamily:'IBM Plex Mono', fontSize:8, cursor:'pointer',
+              }}>{n}</button>
+          ))}
+        </div>
+      ) : (
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:3 }}>
+          {(params.role === 'vco' ? VCO_WAVES : WAVES).map((w, i) => (
+            <button key={w} onClick={() => onChange({ wave: w, karplusStrong: false })}
+              style={{
+                padding:'5px 0', borderRadius:3, border:'1px solid var(--bord)',
+                background: params.wave === w && !params.karplusStrong ? col : 'none',
+                color: params.wave === w && !params.karplusStrong ? 'var(--bg)' : 'var(--muted)',
+                fontFamily:'IBM Plex Mono', fontSize:8, cursor:'pointer', transition:'all .1s',
+              }}>{(params.role === 'vco' ? VCO_WAVE_LABELS : WAVE_LABELS)[i]}</button>
+          ))}
+        </div>
+      )}
       <button onClick={() => onChange({ karplusStrong: !params.karplusStrong })}
         style={{
           padding:'5px 0', borderRadius:3, border:`1px solid ${params.karplusStrong ? 'var(--amber)' : 'var(--bord)'}`,
@@ -112,6 +154,17 @@ export const OperatorPanel: React.FC<Props> = ({ index, params, isCarrier, onCha
           label="fdbk" display={v => Math.round(v*100)+'%'} color={col}
           onChange={v => onChange({ feedback: v })} size={40} />
       </div>
+
+      {params.role === 'vco' && (
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:4 }}>
+          <Knob value={params.pulseWidth} min={0.02} max={0.98} step={0.01}
+            label="width" display={v => Math.round(v*100)+'%'} color={col}
+            onChange={v => onChange({ pulseWidth: v })} size={40} />
+          <Knob value={params.drift} min={0} max={1} step={0.01}
+            label="drift" display={v => Math.round(v*100)+'%'} color={col}
+            onChange={v => onChange({ drift: v })} size={40} />
+        </div>
+      )}
 
       {/* Envelope */}
       <div style={{ display:'flex', alignItems:'center', gap:6 }}>
