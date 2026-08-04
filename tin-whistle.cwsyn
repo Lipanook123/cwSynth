@@ -1,0 +1,382 @@
+{
+  "name": "Tin Whistle",
+  "author": "CW Synth",
+  "tags": [
+    "wind",
+    "flute",
+    "whistle",
+    "acoustic",
+    "irish"
+  ],
+  "version": 2,
+  "algorithm": 16,
+  "routes": null,
+  "operators": [
+    {
+      "enabled": true,
+      "role": "vco",
+      "wave": "sine",
+      "wavetableData": null,
+      "ratio": 1,
+      "fine": 0,
+      "fixed": false,
+      "fixedFreq": 440,
+      "level": 0.85,
+      "feedback": 0,
+      "env": {
+        "stages": [
+          {
+            "time": 0.035,
+            "level": 1,
+            "curve": "lin"
+          },
+          {
+            "time": 0.12,
+            "level": 0.94,
+            "curve": "exp"
+          }
+        ],
+        "sustainStage": 1,
+        "release": [
+          {
+            "time": 0.11,
+            "level": 0,
+            "curve": "exp"
+          }
+        ],
+        "velSens": 0.55,
+        "keyRateScale": 0,
+        "keyLevelScale": 0
+      },
+      "karplusStrong": false,
+      "ksDecay": 0.995,
+      "pulseWidth": 0.5,
+      "drift": 0.1,
+      "noiseType": "white"
+    },
+    {
+      "enabled": true,
+      "role": "vco",
+      "wave": "sine",
+      "wavetableData": null,
+      "ratio": 2,
+      "fine": 0,
+      "fixed": false,
+      "fixedFreq": 440,
+      "level": 0.2,
+      "feedback": 0,
+      "env": {
+        "stages": [
+          {
+            "time": 0.045,
+            "level": 1,
+            "curve": "lin"
+          },
+          {
+            "time": 0.15,
+            "level": 0.9,
+            "curve": "exp"
+          }
+        ],
+        "sustainStage": 1,
+        "release": [
+          {
+            "time": 0.09,
+            "level": 0,
+            "curve": "exp"
+          }
+        ],
+        "velSens": 0.7,
+        "keyRateScale": 0,
+        "keyLevelScale": 0
+      },
+      "karplusStrong": false,
+      "ksDecay": 0.995,
+      "pulseWidth": 0.5,
+      "drift": 0.1,
+      "noiseType": "white"
+    },
+    {
+      "enabled": true,
+      "role": "vco",
+      "wave": "sine",
+      "wavetableData": null,
+      "ratio": 3,
+      "fine": 0,
+      "fixed": false,
+      "fixedFreq": 440,
+      "level": 0.075,
+      "feedback": 0,
+      "env": {
+        "stages": [
+          {
+            "time": 0.05,
+            "level": 1,
+            "curve": "lin"
+          },
+          {
+            "time": 0.18,
+            "level": 0.82,
+            "curve": "exp"
+          }
+        ],
+        "sustainStage": 1,
+        "release": [
+          {
+            "time": 0.08,
+            "level": 0,
+            "curve": "exp"
+          }
+        ],
+        "velSens": 0.8,
+        "keyRateScale": 0,
+        "keyLevelScale": 0
+      },
+      "karplusStrong": false,
+      "ksDecay": 0.995,
+      "pulseWidth": 0.5,
+      "drift": 0.1,
+      "noiseType": "white"
+    },
+    {
+      "enabled": true,
+      "role": "noise",
+      "wave": "sine",
+      "wavetableData": null,
+      "ratio": 1,
+      "fine": 0,
+      "fixed": false,
+      "fixedFreq": 440,
+      "level": 0.24,
+      "feedback": 0,
+      "env": {
+        "stages": [
+          {
+            "time": 0.05,
+            "level": 1,
+            "curve": "lin"
+          },
+          {
+            "time": 0.2,
+            "level": 0.85,
+            "curve": "exp"
+          }
+        ],
+        "sustainStage": 1,
+        "release": [
+          {
+            "time": 0.13,
+            "level": 0,
+            "curve": "exp"
+          }
+        ],
+        "velSens": 0.75,
+        "keyRateScale": 0,
+        "keyLevelScale": 0
+      },
+      "karplusStrong": false,
+      "ksDecay": 0.995,
+      "pulseWidth": 0.5,
+      "drift": 0,
+      "noiseType": "white"
+    },
+    {
+      "enabled": true,
+      "role": "noise",
+      "wave": "sine",
+      "wavetableData": null,
+      "ratio": 1,
+      "fine": 0,
+      "fixed": false,
+      "fixedFreq": 440,
+      "level": 0.19,
+      "feedback": 0,
+      "env": {
+        "stages": [
+          {
+            "time": 0.004,
+            "level": 1,
+            "curve": "lin"
+          },
+          {
+            "time": 0.06,
+            "level": 0,
+            "curve": "exp"
+          }
+        ],
+        "sustainStage": -1,
+        "release": [
+          {
+            "time": 0.02,
+            "level": 0,
+            "curve": "exp"
+          }
+        ],
+        "velSens": 0.85,
+        "keyRateScale": 0.35,
+        "keyLevelScale": 0
+      },
+      "karplusStrong": false,
+      "ksDecay": 0.995,
+      "pulseWidth": 0.5,
+      "drift": 0,
+      "noiseType": "white"
+    },
+    {
+      "enabled": false,
+      "role": "fm",
+      "wave": "sine",
+      "wavetableData": null,
+      "ratio": 1,
+      "fine": 0,
+      "fixed": false,
+      "fixedFreq": 440,
+      "level": 0.8,
+      "feedback": 0,
+      "env": {
+        "stages": [
+          {
+            "time": 0.01,
+            "level": 1,
+            "curve": "lin"
+          },
+          {
+            "time": 0.3,
+            "level": 0.5,
+            "curve": "exp"
+          }
+        ],
+        "sustainStage": 1,
+        "release": [
+          {
+            "time": 0.1,
+            "level": 0,
+            "curve": "exp"
+          }
+        ],
+        "velSens": 0,
+        "keyRateScale": 0,
+        "keyLevelScale": 0
+      },
+      "karplusStrong": false,
+      "ksDecay": 0.995,
+      "pulseWidth": 0.5,
+      "drift": 0,
+      "noiseType": "white"
+    }
+  ],
+  "filter": {
+    "enabled": true,
+    "model": "svf",
+    "type": "lowpass",
+    "cutoff": 2400,
+    "resonance": 4,
+    "slope": 12,
+    "drive": 0,
+    "hpfCutoff": 260,
+    "envAmount": 0.24,
+    "env": {
+      "stages": [
+        {
+          "time": 0.018,
+          "level": 1,
+          "curve": "lin"
+        },
+        {
+          "time": 0.16,
+          "level": 0.55,
+          "curve": "exp"
+        }
+      ],
+      "sustainStage": 1,
+      "release": [
+        {
+          "time": 0.1,
+          "level": 0,
+          "curve": "exp"
+        }
+      ],
+      "velSens": 0.5,
+      "keyRateScale": 0,
+      "keyLevelScale": 0
+    },
+    "keytrack": 0.85
+  },
+  "lfo1": {
+    "shape": "sine",
+    "rate": 5.2,
+    "depth": 0.5,
+    "delay": 0.35,
+    "sync": true,
+    "swing": 0
+  },
+  "lfo2": {
+    "shape": "sine",
+    "rate": 0.3,
+    "depth": 0.3,
+    "delay": 0.2,
+    "sync": true,
+    "swing": 0
+  },
+  "modMatrix": [
+    {
+      "source": "lfo1",
+      "dest": "pitch",
+      "amount": 0.5,
+      "enabled": true
+    },
+    {
+      "source": "lfo1",
+      "dest": "amp",
+      "amount": 0.18,
+      "enabled": true
+    }
+  ],
+  "fx": {
+    "reverb": {
+      "enabled": true,
+      "size": 0.5,
+      "damp": 0.5,
+      "mix": 0.22
+    },
+    "delay": {
+      "enabled": false,
+      "time": 0.375,
+      "feedback": 0.4,
+      "mix": 0.25,
+      "sync": false
+    },
+    "chorus": {
+      "enabled": false,
+      "rate": 0.5,
+      "depth": 0.3,
+      "mix": 0.4
+    },
+    "dist": {
+      "enabled": false,
+      "drive": 2,
+      "tone": 0.5,
+      "mix": 0.5,
+      "mode": "soft"
+    },
+    "eq": {
+      "enabled": true,
+      "low": -5,
+      "mid": 1.5,
+      "high": 1,
+      "midFreq": 2500
+    }
+  },
+  "polyphony": 1,
+  "voiceMode": "legato",
+  "notePriority": "last",
+  "glide": 0.025,
+  "unison": {
+    "voices": 1,
+    "detune": 8,
+    "spread": 0.5
+  },
+  "pitchBend": 2,
+  "transpose": 0,
+  "volume": 0.72
+}

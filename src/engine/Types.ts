@@ -32,8 +32,9 @@ export type ModDest =
  * slots become DX-7 FM operators, Minimoog VCOs, an ESQ-1 wavetable DCO, or a
  * D-50 PCM attack transient depending on this field.
  *
- * Only 'fm' is implemented today; the rest are defined so the v1→v2 migration
- * happens once rather than once per phase.
+ * `fm`, `vco` and `noise` are implemented. `wavetable` and `pcm` are defined so
+ * the schema did not need a second breaking change later; they currently behave
+ * as `fm`.
  */
 export type OpRole = 'fm' | 'vco' | 'noise' | 'wavetable' | 'pcm';
 
