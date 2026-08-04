@@ -36,6 +36,8 @@ export class AudioEngine {
   private heldNotes: number[] = [];
   /** Pitch of the last note, so the next one knows where to glide from. */
   private lastHz = 0;
+  /** Guards against stacking redundant resume() calls while one is in flight. */
+  private resumePending = false;
   private lastVelocity = 0.8;
   public arp: Arpeggiator;
   private patch: PatchParams = { ...DEFAULT_PATCH };
@@ -106,12 +108,27 @@ export class AudioEngine {
     return this.ctx ? loadWorklets(this.ctx) : Promise.resolve(false);
   }
 
+  /**
+   * Bring the context out of suspension on a user gesture.
+   *
+   * Since preload() creates the context ahead of any gesture, it is *always*
+   * suspended until the first note — so this is the normal path, not a fault,
+   * and is logged accordingly. The pending guard matters because resume() runs
+   * on every noteOn while `ctx.resume()` is async: a fast chord would otherwise
+   * fire several redundant calls and log a line for each.
+   */
   resume() {
     this._init();
-    if (this.ctx?.state === 'suspended') {
-      logger.warn('AudioContext suspended — resuming');
-      this.ctx.resume().then(() => logger.info('AudioContext resumed'));
-    }
+    if (!this.ctx || this.ctx.state !== 'suspended' || this.resumePending) return;
+
+    this.resumePending = true;
+    logger.info('AudioContext suspended — resuming on user gesture');
+    this.ctx.resume()
+      .then(() => logger.info('AudioContext running'))
+      // Without this, a rejected resume surfaces as an unhandled rejection,
+      // which the logger then reports as a separate [promise] error.
+      .catch(err => logger.error(`AudioContext resume failed: ${String(err)}`))
+      .finally(() => { this.resumePending = false; });
   }
 
   /** True once the worklet processors are registered; false means fallback nodes. */

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { engine } from '../../engine/AudioEngine';
+import { useCanvasResize } from '../hooks/useCanvasResize';
 
 interface Props {
   height?: number;          // px; omit to fill parent (parent must have defined height)
@@ -14,6 +15,7 @@ interface Props {
 export function Scope({ height, stable = false, showGrid = false, frozen = false, flex = true, onToggleFreeze }: Props) {
   const fillParent = !height;
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  useCanvasResize(canvasRef);
   const rafRef    = useRef<number>(0);
   const frozenRef = useRef(frozen);
   frozenRef.current = frozen;
@@ -22,14 +24,6 @@ export function Scope({ height, stable = false, showGrid = false, frozen = false
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d')!;
-
-    const resize = () => {
-      canvas.width  = canvas.offsetWidth  * devicePixelRatio;
-      canvas.height = canvas.offsetHeight * devicePixelRatio;
-    };
-    resize();
-    const ro = new ResizeObserver(resize);
-    ro.observe(canvas);
 
     const draw = () => {
       rafRef.current = requestAnimationFrame(draw);
@@ -102,7 +96,7 @@ export function Scope({ height, stable = false, showGrid = false, frozen = false
       ctx.stroke();
     };
     draw();
-    return () => { cancelAnimationFrame(rafRef.current); ro.disconnect(); };
+    return () => { cancelAnimationFrame(rafRef.current); };
   }, [stable, showGrid]);
 
   return (

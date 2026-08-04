@@ -38,6 +38,15 @@ class Logger {
   install() {
     if (typeof window === 'undefined') return this;
     window.addEventListener('error', e => {
+      // "ResizeObserver loop completed with undelivered notifications" is a
+      // benign browser condition, not a fault: it means an observer callback
+      // changed layout and the browser deferred the rest to the next frame.
+      // It carries no stack and nothing is broken, so reporting it as an error
+      // only buries real ones. Kept at debug level rather than dropped.
+      if (e.message?.includes('ResizeObserver loop')) {
+        this.log(`[benign] ${e.message}`);
+        return;
+      }
       this.error(`[uncaught] ${e.message} @ ${e.filename}:${e.lineno}`);
     });
     window.addEventListener('unhandledrejection', e => {

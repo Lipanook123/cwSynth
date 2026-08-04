@@ -3,6 +3,7 @@ import type { CSSProperties } from 'react';
 import { engine } from '../../engine/AudioEngine';
 import type { ScopeSource } from '../../engine/AudioEngine';
 import { Knob } from './Knob';
+import { useCanvasResize } from '../hooks/useCanvasResize';
 
 const TIME_DIVS = [0.1, 0.2, 0.5, 1, 2, 5, 10, 20]; // ms/div
 const V_DIVS    = [0.05, 0.1, 0.2, 0.5, 1.0, 2.0];   // amplitude/div
@@ -63,6 +64,7 @@ export function ScopePanel() {
   const [meas,       setMeas]       = useState<Meas>({ freq: 0, vpp: 0, rms: 0 });
 
   const canvasRef    = useRef<HTMLCanvasElement>(null);
+  useCanvasResize(canvasRef);
   const rafRef       = useRef<number>(0);
   const singleArmed  = useRef(true);
   const frameCount   = useRef(0);
@@ -103,20 +105,6 @@ export function ScopePanel() {
     const needed = Math.ceil(TIME_DIVS[timeDivIdx] * H_DIVS * sr / 1000);
     engine.setAllFftSizes(nextPow2(needed));
   }, [timeDivIdx]);
-
-  // Resize observer
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const resize = () => {
-      canvas.width  = canvas.offsetWidth  * devicePixelRatio;
-      canvas.height = canvas.offsetHeight * devicePixelRatio;
-    };
-    resize();
-    const ro = new ResizeObserver(resize);
-    ro.observe(canvas);
-    return () => ro.disconnect();
-  }, []);
 
   // Render loop — runs once, reads all state via live ref
   useEffect(() => {
