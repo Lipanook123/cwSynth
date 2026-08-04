@@ -5,6 +5,7 @@ import {
 import { adsrToEnv } from '../engine/Envelope';
 import { normalisePatch } from '../engine/PatchMigration';
 import { ANALOG_PRESETS } from './AnalogPresets';
+import { ACOUSTIC_PRESETS } from './AcousticPresets';
 
 export interface PresetMeta {
   id: string;
@@ -144,6 +145,8 @@ export const FACTORY_PRESETS: PresetMeta[] = [
   { id:'bass',    name:'Synth Bass', author:'CW Synth', tags:['bass','punchy'],   patch:BASS_PATCH },
   // Analog reference patches — see AnalogPresets.ts
   ...ANALOG_PRESETS,
+  // Acoustic instrument emulations — see AcousticPresets.ts
+  ...ACOUSTIC_PRESETS,
 ];
 
 const USER_KEY = 'cwsynth_user_presets';
