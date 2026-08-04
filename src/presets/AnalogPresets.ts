@@ -193,6 +193,68 @@ const OBXA_PAD: PatchParams = {
   volume: 0.62,
 };
 
+/**
+ * OB-Xa stacked brass, in the style of the 1984 Van Halen "Jump" riff.
+ *
+ * An homage rather than a reproduction — the original settings were never
+ * published, and even the instrument is debated (OB-Xa is the usual attribution,
+ * some sources say OB-X). What the recording clearly has, and what this chases:
+ *
+ * - Sawtooth oscillators detuned against each other, which is where the width
+ *   comes from. The OB-Xa has two VCOs per voice and both are saws here.
+ * - The **2-pole** filter, left fairly open. The 4-pole is darker and rounder;
+ *   the brightness of this part is the shallower slope with the cutoff up.
+ * - A quick filter-envelope swell that settles — the brassy "blat" on each
+ *   chord attack, not a slow pad sweep.
+ * - Fast attack and a high sustain, because the part is held block chords.
+ * - Chorus. A lot of the record's size is the chorus, not the synth.
+ *
+ * Deliberate deviations, both for the sound rather than the spec: a third
+ * oscillator an octave up at low level adds the air the record has, and 2-voice
+ * unison widens it further than two VCOs alone would. Drop OP3 and set unison to
+ * 1 for the strictly two-oscillator version.
+ *
+ * Polyphony is 12 — six-note chords at two unison layers each.
+ */
+const JUMP_BRASS: PatchParams = {
+  ...DEFAULT_PATCH,
+  name: 'Jump Brass', author: 'CW Synth', tags: ['brass', 'analog', 'oberheim', '80s'],
+  algorithm: 16,
+  operators: [
+    // The two detuned saws that carry the sound.
+    vco({ ratio: 1, fine: -9, level: 0.85, a: 0.008, d: 0.6, s: 0.88, r: 0.35, drift: 0.35 }),
+    vco({ ratio: 1, fine: 9,  level: 0.85, a: 0.008, d: 0.6, s: 0.88, r: 0.35, drift: 0.35 }),
+    // Octave up, well back in the mix — brightness without thinning the body.
+    vco({ ratio: 2, fine: 4,  level: 0.32, a: 0.012, d: 0.5, s: 0.8,  r: 0.3,  drift: 0.3 }),
+    OFF, OFF, OFF,
+  ],
+  filter: filt({
+    // 2-pole SVF, open. This is the single most important setting for the
+    // character — at 24 dB/oct the same patch turns into a soft pad.
+    model: 'svf', type: 'lowpass', slope: 12,
+    // Cutoff sits *below* the bulk of the harmonics so the envelope sweeps
+    // through them. Parked high it stays above the harmonic energy in both the
+    // attack and the sustain, and the brass edge never happens — measurably so:
+    // the attack/sustain brightness ratio comes out identical.
+    cutoff: 800, resonance: 7, drive: 0.18,
+    envAmount: 0.6, keytrack: 0.35,
+    // Snappy decay to a fairly low sustain: the sweep runs about 4.2kHz down to
+    // 2kHz, just over an octave, which is enough for the edge to read as an
+    // attack transient rather than a slow pad swell.
+    a: 0.004, d: 0.22, s: 0.35, r: 0.35,
+  }),
+  fx: {
+    ...DEFAULT_PATCH.fx,
+    chorus: { enabled: true, rate: 0.42, depth: 0.42, mix: 0.38 },
+    reverb: { enabled: true, size: 0.55, damp: 0.4, mix: 0.22 },
+    // Slight scoop and a presence lift — the part sits above a guitar mix.
+    eq: { enabled: true, low: -1.5, mid: 2, high: 2.5, midFreq: 2500 },
+  },
+  unison: { voices: 2, detune: 10, spread: 0.7 },
+  polyphony: 12,
+  volume: 0.68,
+};
+
 // ── Hard sync demo ─────────────────────────────────────────────────────────
 // Explicit `routes` rather than an algorithm: op1 syncs op2, and only op2 is
 // heard. Sweeping op2's ratio gives the classic sync sweep.
@@ -235,5 +297,6 @@ export const ANALOG_PRESETS = [
   { id: 'jp8-brass',     name: 'Jupiter Brass', author: 'CW Synth', tags: ['brass', 'analog'], patch: JP8_BRASS },
   { id: 'jp8-pad',       name: 'Jupiter Pad',   author: 'CW Synth', tags: ['pad', 'analog'],   patch: JP8_PAD },
   { id: 'obxa-pad',      name: 'OB-Xa Pad',     author: 'CW Synth', tags: ['pad', 'analog'],   patch: OBXA_PAD },
+  { id: 'jump-brass',    name: 'Jump Brass',    author: 'CW Synth', tags: ['brass', '80s'],    patch: JUMP_BRASS },
   { id: 'sync-lead',     name: 'Sync Lead',     author: 'CW Synth', tags: ['lead', 'sync'],    patch: SYNC_LEAD },
 ];
