@@ -30,13 +30,17 @@ The project grew out of an earlier single-file whistle/flute synthesiser (`fm-sy
 ```
 src/
   engine/
-    AudioEngine.ts      — voice lifecycle, note-on/off, context management
-    Voice.ts            — 6-operator FM voice with algorithm routing
-    Operator.ts         — single operator: oscillator, ADSR, feedback, Karplus-Strong
-    Algorithms.ts       — 32 DX7-style algorithm topology definitions
+    AudioEngine.ts      — voice lifecycle, polyphony/stealing, global FX modulation
+    Voice.ts            — 6-operator voice; builds the routing matrix at note-on
+    Operator.ts         — single operator: oscillator, feedback, Karplus-Strong, index curve
+    Envelope.ts         — N-stage rate/level envelope generator
+    Algorithms.ts       — 32 DX7 topologies + expansion to the routing matrix
+    Lfo.ts              — LFO shapes, swing, delayed onset
     Arpeggiator.ts      — lookahead scheduler with voice pooling
     Randomiser.ts       — seeded PRNG, constrained + wild parameter ranges
+    PatchMigration.ts   — patch validation, deep-merge defaults, v1→v2 upgrade
     Types.ts            — full TypeScript interfaces for all patch data
+    __tests__/          — vitest unit tests (envelopes, routing, migration)
   fx/
     FxChain.ts          — global effects bus (reverb, delay, chorus, dist, EQ)
   presets/
@@ -52,6 +56,9 @@ src/
       PresetBrowser.tsx — factory + user preset list, import/export
       Keyboard.tsx      — on-screen piano keyboard
       Scope.tsx         — oscilloscope (canvas, Web Audio analyser)
+      LfoPanel.tsx      — LFO 1/2 shape, rate, depth, delay, swing
+      ModMatrix.tsx     — mod routing editor grouped by destination
+      AdsrKnobs.tsx     — envelope editor; ADSR knobs or per-stage rate/level grid
       Knob.tsx          — reusable rotary knob (drag, scroll, double-click to type)
       RandomControls.tsx — dice button, seed input, safe/wild toggle
     hooks/
@@ -68,12 +75,16 @@ src/
 **6 operators** per voice, each with:
 
 - Selectable waveform: sine, triangle, sawtooth, square (wavetable type defined but editor not yet built)
-- Frequency ratio (0.5–16×) and fine detune (±100 cents)
-- ADSR envelope controlling amplitude
-- Self-feedback loop (operator modulating its own frequency)
+- Frequency ratio (0.5–16×) and fine detune (±100 cents), or fixed-frequency mode
+- N-stage rate/level envelope with exponential or linear segments, velocity
+  sensitivity, and DX-7 key rate/level scaling
+- Self-feedback loop (operator modulating its own frequency), scaled by the
+  operator's frequency so it holds across the keyboard
 - Per-operator enable/disable
 
-**32 algorithms** — the full DX7 topology set. Each algorithm defines which operators are carriers (routed to audio output) and which are modulators (routed to another operator's frequency input). Algorithms are defined as data in `Algorithms.ts` and the routing is built dynamically in `Voice.ts` on each note-on.
+**32 algorithms** — the full DX7 topology set. Each algorithm defines which operators are carriers (routed to audio output) and which are modulators (routed to another operator's frequency input). `expandAlgorithm()` turns them into a general routing matrix (`Route[]`), which `Voice.ts` builds on each note-on — after the operators' oscillators exist, so the frequency inputs are reachable. A patch may supply its own `routes` array to override the algorithm.
+
+**Modulation index** — a modulator's `level` maps through an exponential curve to an FM index (max 10), and the resulting depth is scaled by the modulator's own frequency. That scaling is what keeps a patch's timbre constant across the keyboard.
 
 **Karplus-Strong physical modelling** — any operator can be switched to KS mode, replacing its oscillator with a noise burst fed into a delay/filter feedback loop. Produces plucked string and percussion timbres. Decay rate is adjustable.
 
@@ -81,12 +92,27 @@ src/
 
 ### Resonant Filter
 
-Per-voice filter inserted between the FM carrier mix and the output. Supports lowpass, highpass, bandpass, and notch modes. Parameters:
+Per-voice biquad (12 dB/oct) inserted between the carrier mix and the output. Supports lowpass, highpass, bandpass, and notch modes. Parameters:
 
 - Cutoff frequency (20Hz–20kHz)
 - Resonance / Q (0.1–30)
-- Dedicated ADSR envelope with adjustable depth (−1 to +1, scales ±4 octaves)
+- Dedicated envelope with adjustable depth (−1 to +1, scales ±4 octaves), applied
+  as an additive offset so it composes with key tracking and LFO modulation
 - Key tracking (0–100%, scales cutoff with MIDI note)
+
+### LFOs and Mod Matrix
+
+Two per-voice LFOs (sine, triangle, sawtooth, square, random) with rate, depth,
+delayed onset, key sync, and swing. An LFO only runs when a mod-matrix slot
+references it. Destinations cover pitch, amp, filter cutoff/resonance, per-operator
+level and frequency, and the three global FX wet mixes — the latter driven by a
+free-running LFO pair on the FX bus rather than per voice.
+
+### Voice Management
+
+Voices are allocated per note and torn down after their longest *enabled*
+operator release. A configurable polyphony ceiling (default 16) steals the oldest
+sounding voice with a short fade.
 
 ### Arpeggiator
 
@@ -149,73 +175,82 @@ User presets are saved to `localStorage`. Patches can be exported as `.cwsyn` JS
 
 ## Not Yet Implemented
 
-These features are designed and typed but not yet wired up:
+### Analog oscillator + filter (worklets)
+Hard sync, pulse-width modulation, and a self-oscillating ladder/SVF filter
+cannot be built from Web Audio's stock nodes. Two `AudioWorklet` processors are
+planned: `ladder-filter` (Moog ZDF ladder, 2/4-pole switchable, self-oscillation,
+tanh drive) and `analog-osc` (PolyBLEP saw/pulse/tri, PWM, hard sync,
+free-running phase, drift). These unlock the Minimoog, Jupiter-8 and OB-Xa.
 
-### LFOs
-`LfoParams` is defined in `Types.ts` and `lfo1`/`lfo2` fields exist on every patch, but no LFO oscillators exist in the engine. No modulation is applied at runtime. **This is the next build priority.**
+### Operator roles beyond `fm`
+`OperatorParams.role` is defined as `fm | vco | noise | wavetable | pcm`. Only
+`fm` is implemented; the others are in the schema so the patch format did not
+need a second breaking change later.
 
-### Mod Matrix
-`ModSlot`, `ModSource`, and `ModDest` types are fully defined in `Types.ts`. The patch format includes a `modMatrix` array. No UI panel exists and the engine does not read or apply mod matrix entries. **Depends on LFOs being implemented first.**
+### Route kinds beyond `fm` and `mix`
+The routing matrix accepts `am`, `ring` and `sync`, but the engine skips them
+with a warning. Ring modulation is needed for the D-50 and Jupiter-8.
 
-### Velocity Sensitivity
-The keyboard fires notes with a hardcoded velocity of 0.8. The engine's `noteOn` method accepts velocity and passes it to operators, but the keyboard component does not derive variable values from touch area, mouse speed, or MIDI velocity.
+### Mod sources beyond the LFOs
+`env1`–`env6`, `velocity` and `mod` are typed and shown in the UI as disabled.
+Only `lfo1` and `lfo2` are wired.
 
-### Pitch Bend / Mod Wheel
-`pitchBend` range is in the patch type. MIDI CC messages (pitch bend, mod wheel) are not handled. No UI control exists.
+### Pitch bend / mod wheel
+`pitchBend` is in the patch type but never read. MIDI CC messages are not
+handled.
 
-### Transpose
-`transpose` (semitones) is in the patch type but is not applied in `AudioEngine._noteOn()`. One-line fix.
+### Glide and unison
+`glide` and `unison` are in the schema with no engine support yet. Both are
+prerequisites for convincing Minimoog and OB-Xa emulation.
 
-### Fixed-Frequency Operator Mode
-The `fixed` and `fixedFreq` fields exist in `OperatorParams` and `Operator.ts` reads them correctly. The operator panel UI only shows ratio/fine controls — there is no toggle to switch an operator into fixed-frequency mode.
-
-### Wavetable Editor
-`wavetableData` (normalised float array, 2048 samples) is in `OperatorParams`. `Operator.ts` has a working `setWavetable()` method that performs a DFT and builds a `PeriodicWave`. No UI exists to draw a waveform in the browser or import a WAV file. The wave type selector in the operator panel does not expose the `wavetable` option yet.
-
-### Voice Stealing
-There is no polyphony limit. Holding many notes simultaneously creates a voice per note with no ceiling. A standard voice-stealing algorithm (steal oldest, steal quietest) should be added with a configurable polyphony limit.
+### Wavetable editor
+`Operator.setWavetable()` performs a DFT and builds a `PeriodicWave`, and
+`wavetableData` round-trips through the patch format, but there is no UI to draw
+or import a waveform, and the wave selector does not expose the `wavetable`
+option.
 
 ---
 
 ## Planned Build Order
 
-| Priority | Feature | Notes |
+| Phase | Feature | Targets |
 |---|---|---|
-| 1 | LFOs — engine + UI | Real LFO oscillators, rate/depth/shape/delay controls, per-patch lfo1 + lfo2 |
-| 2 | Mod matrix — engine + UI | Sources: LFO1, LFO2, ENV1–6, velocity, mod wheel. Destinations: op levels, ratios, filter cutoff, filter res, pitch, amp, FX mix |
-| 3 | Velocity sensitivity | Variable velocity from keyboard touch area/speed and MIDI |
-| 4 | Pitch bend / mod wheel | MIDI CC handling, on-screen pitch bend strip |
-| 5 | Transpose control | Semitone offset in topbar or global settings panel |
-| 6 | Fixed-frequency operator mode | Toggle per operator, Hz input replacing ratio |
-| 7 | Wavetable editor | Draw waveform in canvas, import WAV, FFT → PeriodicWave |
-| 8 | Voice stealing / polyphony limit | Configurable limit, steal-oldest algorithm |
+| 2 | Ladder/SVF filter worklet, analog oscillator worklet, noise, glide, unison, drift | Minimoog, Jupiter-8, OB-Xa |
+| 3 | Free envelopes, third LFO, full mod-source coverage, ring mod, ROM wavetables, PCM transients | ESQ-1, D-50 |
+| 4 | Pitch bend, mod wheel, aftertouch, wavetable editor, per-synth templates | All |
 
 ---
 
 ## Patch Format (.cwsyn)
 
-A `.cwsyn` file is standard JSON. Example minimal structure:
+A `.cwsyn` file is standard JSON at schema version 2. See
+[PATCH_AUTHORING.md](PATCH_AUTHORING.md) for the full field reference and what
+each parameter does audibly.
 
 ```json
 {
   "name": "My Patch",
-  "author": "CW Synth",
-  "tags": ["bass", "dark"],
-  "version": 1,
+  "version": 2,
   "algorithm": 5,
-  "operators": [ /* 6 operator objects */ ],
-  "filter": { /* FilterParams */ },
+  "routes": null,
+  "operators": [ /* 6 operator objects, each with an `env` */ ],
+  "filter": { /* FilterParams, with an `env` */ },
   "lfo1": { /* LfoParams */ },
   "lfo2": { /* LfoParams */ },
   "modMatrix": [ /* ModSlot[] */ ],
   "fx": { /* FxParams */ },
+  "polyphony": 16,
+  "glide": 0,
+  "unison": { "voices": 1, "detune": 8, "spread": 0.5 },
   "pitchBend": 2,
   "transpose": 0,
   "volume": 0.7
 }
 ```
 
-All fields have typed defaults in `Types.ts` so partial patches load safely — missing fields fall back to `DEFAULT_PATCH` values.
+Partial patches load safely — `normalisePatch()` in `src/engine/PatchMigration.ts`
+deep-merges defaults, validates enums, and upgrades v1 files (flat ADSR fields)
+to v2 envelopes automatically.
 
 ---
 
@@ -233,4 +268,10 @@ Development server with hot reload:
 
 ```bash
 npm run dev
+```
+
+Unit tests:
+
+```bash
+npm test
 ```

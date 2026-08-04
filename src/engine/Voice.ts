@@ -1,24 +1,38 @@
-import { Operator } from './Operator';
-import { ALGORITHMS } from './Algorithms';
-import type { PatchParams, FilterParams, ModDest } from './Types';
+import { Operator, levelToIndex } from './Operator';
+import { expandAlgorithm } from './Algorithms';
+import type { PatchParams, FilterParams, ModDest, Route } from './Types';
+import { scheduleEnvelope, scheduleRelease, releaseDuration } from './Envelope';
 import { Lfo } from './Lfo';
 import { logger } from '../debug/Logger';
+
+/** An AudioParam plus how far a unit modulator should swing it. */
+interface ModTarget { param: AudioParam; scale: number }
+
+/** Cutoff envelope depth: envAmount 1.0 opens the filter by four octaves. */
+const FILTER_ENV_OCTAVES = 4;
 
 export class Voice {
   private ctx: AudioContext;
   public output: GainNode;
   private operators: Operator[];
+  private carrierMix: GainNode;
   private filter: BiquadFilterNode;
+  private filterEnvSource: ConstantSourceNode;
   private filterEnvGain: GainNode;
-  private driveNode: WaveShaperNode;
-  private driveGain: GainNode;
-  private dryGain: GainNode;
   public semitone: number;
   public noteHz: number;
   private patch: PatchParams;
-  private freqConnections: Array<[number, number]> = []; // [source op idx, target op idx]
+  private routes: Route[];
   private lfoA: Lfo;
   private lfoB: Lfo;
+
+  /** Gain stages built at noteOn — amplitude for carriers, FM index for modulators. */
+  private routeGains: GainNode[] = [];
+  /** Outgoing route gains per source operator, so opN_level can modulate them. */
+  private gainsBySource: GainNode[][] = Array.from({ length: 6 }, () => []);
+  private velocity = 1;
+  private _noteOffTime = 0;
+  private _endTime = Infinity;
 
   constructor(ctx: AudioContext, patch: PatchParams, semitone: number, hz: number) {
     this.ctx = ctx;
@@ -26,77 +40,41 @@ export class Voice {
     this.semitone = semitone;
     this.noteHz = hz;
 
+    this.routes = patch.routes ?? expandAlgorithm(patch.algorithm);
+
+    // Master volume lives on AudioEngine.masterGain only — applying it here too
+    // would square it.
     this.output = ctx.createGain();
-    this.output.gain.value = patch.volume;
+    this.output.gain.value = 1;
 
-    // Per-voice drive (soft saturation insert)
-    this.driveNode = ctx.createWaveShaper();
-    this.driveNode.oversample = '2x';
-    this._updateDriveCurve(1);
-    this.driveGain = ctx.createGain(); this.driveGain.gain.value = 0;
-    this.dryGain   = ctx.createGain(); this.dryGain.gain.value = 1;
+    this.carrierMix = ctx.createGain();
+    this.carrierMix.gain.value = 1;
 
-    // Filter
     this.filter = ctx.createBiquadFilter();
-    this.filterEnvGain = ctx.createGain(); this.filterEnvGain.gain.value = 0;
     this._applyFilterParams(patch.filter);
 
-    // Operators
+    // Filter envelope as an additive offset on cutoff, so it composes with both
+    // key tracking and any LFO routed to filter_cutoff.
+    this.filterEnvSource = ctx.createConstantSource();
+    this.filterEnvSource.offset.value = 1;
+    this.filterEnvGain = ctx.createGain();
+    this.filterEnvGain.gain.value = 0;
+    this.filterEnvSource.connect(this.filterEnvGain);
+    this.filterEnvGain.connect(this.filter.frequency);
+    this.filterEnvSource.start();
+
     this.operators = patch.operators.map(op => new Operator(ctx, op));
 
-    // LFOs (started on noteOn)
     this.lfoA = new Lfo(ctx);
     this.lfoB = new Lfo(ctx);
 
-    // Signal chain: ops → filter chain → drive → output
-    // operators connect directly based on algorithm
-    this._buildRouting();
-  }
-
-  private _buildRouting() {
-    const algo = ALGORITHMS.find(a => a.id === this.patch.algorithm) ?? ALGORITHMS[0];
-
-    // Disconnect previous
-    this.operators.forEach(op => op.disconnectOutput());
-    this.freqConnections.forEach((_conn) => {
-      // disconnected implicitly when output is disconnected
-    });
-    this.freqConnections = [];
-
-    // Mix node for all carriers
-    const carrierMix = this.ctx.createGain();
-    carrierMix.gain.value = 1;
-
-    // Connect modulators → target operator frequency inputs
-    for (const [tgt, src] of algo.modulators) {
-      if (!this.patch.operators[src]?.enabled) continue;
-      // FM amount = outputGain scaled by noteHz (standard FM: index = modAmt / carrierFreq)
-      // We set outputGain per-operator in noteOn
-      this.operators[src].connectToFrequency(this.operators[tgt]);
-      this.freqConnections.push([src, tgt]);
-    }
-
-    // Carriers → mix
-    for (const ci of algo.carriers) {
-      if (!this.patch.operators[ci]?.enabled) continue;
-      this.operators[ci].connectToOutput(carrierMix);
-    }
-
-    // carrierMix → filter (or bypass) → drive → output
-    const fp = this.patch.filter;
-    if (fp.enabled) {
-      carrierMix.connect(this.filter);
-      carrierMix.connect(this.dryGain);   // dry path parallel (0 gain when filter active)
-      this.dryGain.gain.value = 0;
-      this.filter.connect(this.driveGain);
-      this.driveGain.connect(this.driveNode);
-      this.driveNode.connect(this.output);
-      this.filter.connect(this.output);   // also connect directly for mix
+    // Fixed part of the chain. Operator routing is built in noteOn, once the
+    // oscillators exist and their frequency params are reachable.
+    if (patch.filter.enabled) {
+      this.carrierMix.connect(this.filter);
+      this.filter.connect(this.output);
     } else {
-      carrierMix.connect(this.driveGain);
-      this.driveGain.connect(this.driveNode);
-      this.driveNode.connect(this.output);
-      carrierMix.connect(this.output);
+      this.carrierMix.connect(this.output);
     }
   }
 
@@ -106,145 +84,227 @@ export class Voice {
     this.filter.Q.value = fp.resonance;
   }
 
-  private _updateDriveCurve(drive: number) {
-    const n = 256;
-    const curve = new Float32Array(n);
-    for (let i = 0; i < n; i++) {
-      const x = (i * 2) / n - 1;
-      curve[i] = (Math.PI + drive) * x / (Math.PI + drive * Math.abs(x));
+  /**
+   * Wire operators together according to the routing matrix.
+   *
+   * MUST run after every operator's noteOn, because an FM route needs the
+   * target's oscillator frequency AudioParam, which only exists once the
+   * oscillator has been created. Building this in the constructor (as the
+   * original did) is what made the synth do amplitude modulation instead of FM.
+   */
+  private _buildRouting(time: number) {
+    for (const route of this.routes) {
+      const srcParams = this.patch.operators[route.from];
+      if (!srcParams?.enabled) continue;
+      const src = this.operators[route.from];
+      if (!src) continue;
+
+      if (route.to === 'out') {
+        // Carrier: level is amplitude.
+        const g = this.ctx.createGain();
+        g.gain.setValueAtTime(srcParams.level * route.amount, time);
+        src.unitOut.connect(g);
+        g.connect(this.carrierMix);
+        this.routeGains.push(g);
+        this.gainsBySource[route.from].push(g);
+        continue;
+      }
+
+      const tgtParams = this.patch.operators[route.to];
+      if (!tgtParams?.enabled) continue;
+      const tgt = this.operators[route.to];
+      if (!tgt) continue;
+
+      if (route.kind !== 'fm') {
+        // ring / am / sync arrive with the analog and D-50 phases.
+        logger.warn(`route kind '${route.kind}' not implemented, skipping`);
+        continue;
+      }
+
+      const freqParam = tgt.getFrequencyParam();
+      if (!freqParam) continue; // Karplus-Strong operators have no oscillator to modulate
+
+      // Peak frequency deviation = index × modulator frequency. Scaling by the
+      // modulator's own frequency is what holds timbre constant across the
+      // keyboard instead of getting duller as you play higher.
+      const depthHz = levelToIndex(srcParams.level) * route.amount * src.getFrequency();
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(depthHz, time);
+      src.unitOut.connect(g);
+      g.connect(freqParam);
+      this.routeGains.push(g);
+      this.gainsBySource[route.from].push(g);
     }
-    this.driveNode.curve = curve;
   }
 
   noteOn(velocity: number, time: number) {
-    const hz = this.noteHz;
     const p = this.patch;
-    const algo = ALGORITHMS.find(a => a.id === p.algorithm) ?? ALGORITHMS[0];
+    this.velocity = velocity;
 
+    // 1. Start every operator first — this creates the oscillators.
     p.operators.forEach((op, i) => {
       if (!op.enabled) return;
-      // FM index: modulator output scaled to produce meaningful modulation
-      // Standard DX7: outputLevel is in Hz (= ratio * carrierHz * index)
-      // We expose it as the operator's level × hz factor
-      const isCarrier = algo.carriers.includes(i);
-      const scaledVelocity = isCarrier ? velocity : velocity * op.level;
       this.operators[i].updateParams(op);
-      this.operators[i].noteOn(hz, scaledVelocity, time);
+      if (op.wave === 'wavetable' && op.wavetableData) {
+        this.operators[i].setWavetable(op.wavetableData);
+      }
+      this.operators[i].noteOn(this.noteHz, velocity, this.semitone, time);
     });
 
-    // Filter envelope
+    // 2. Now the frequency params exist, so routing can be built.
+    this._buildRouting(time);
+
+    // 3. Filter envelope.
     if (p.filter.enabled) {
       const fp = p.filter;
       const baseCutoff = fp.cutoff * Math.pow(2, fp.keytrack * (this.semitone - 60) / 12);
-      const envRange = baseCutoff * Math.pow(2, fp.envAmount * 4) - baseCutoff;
-      const fc = this.filter.frequency;
-      fc.cancelScheduledValues(time);
-      fc.setValueAtTime(baseCutoff, time);
-      fc.linearRampToValueAtTime(baseCutoff + envRange, time + fp.attack);
-      fc.linearRampToValueAtTime(baseCutoff + envRange * fp.sustain, time + fp.attack + fp.decay);
+      const envRange = baseCutoff * (Math.pow(2, fp.envAmount * FILTER_ENV_OCTAVES) - 1);
+      this.filter.frequency.cancelScheduledValues(time);
+      this.filter.frequency.setValueAtTime(baseCutoff, time);
+      scheduleEnvelope(this.filterEnvGain.gain, fp.env, time, envRange, velocity, this.semitone);
     }
 
-    // LFO + mod matrix
+    // 4. LFOs + mod matrix.
     const activeSlots = p.modMatrix.filter(s => s.enabled);
     const hasLfo1 = activeSlots.some(s => s.source === 'lfo1');
     const hasLfo2 = activeSlots.some(s => s.source === 'lfo2');
-    logger.log(`voice lfo wire: slots=${activeSlots.length} lfo1=${hasLfo1} lfo2=${hasLfo2}`);
     if (hasLfo1) this.lfoA.start(p.lfo1, time);
     if (hasLfo2) this.lfoB.start(p.lfo2, time);
+
     for (const slot of activeSlots) {
       const lfo = slot.source === 'lfo1' ? this.lfoA : slot.source === 'lfo2' ? this.lfoB : null;
       if (!lfo) continue;
       const lfoDepth = slot.source === 'lfo1' ? p.lfo1.depth : p.lfo2.depth;
-      const targets = this._getModTargets(slot.dest);
-      const scale = this._modScale(slot.dest, slot.amount * lfoDepth);
-      targets.forEach(t => lfo.addConnection(t, scale));
+      const amount = slot.amount * lfoDepth;
+      for (const t of this._getModTargets(slot.dest, amount)) {
+        lfo.addConnection(t.param, t.scale);
+      }
     }
   }
 
-  private _getModTargets(dest: ModDest): AudioParam[] {
-    const opLvl = dest.match(/^op(\d)_level$/);
-    if (opLvl) { const op = this.operators[+opLvl[1] - 1]; return op ? [op.getLevelParam()] : []; }
-    const opRat = dest.match(/^op(\d)_ratio$/);
-    if (opRat) { const op = this.operators[+opRat[1] - 1]; return op ? [op.getOscFrequency()] : []; }
-    switch (dest) {
-      case 'filter_cutoff': return [this.filter.frequency];
-      case 'filter_res':    return [this.filter.Q];
-      case 'amp':           return [this.output.gain];
-      case 'pitch':
-        return this.operators
-          .filter((_, i) => this.patch.operators[i]?.enabled)
-          .map(op => op.getOscFrequency());
-      default: return [];
-    }
-  }
-
-  private _modScale(dest: ModDest, amount: number): number {
+  /**
+   * Resolve a mod destination to the AudioParams it drives, each with the swing
+   * a unit (±1) modulator should produce.
+   */
+  private _getModTargets(dest: ModDest, amount: number): ModTarget[] {
     const p = this.patch;
+
     const opLvl = dest.match(/^op(\d)_level$/);
-    if (opLvl) return amount * (p.operators[+opLvl[1] - 1]?.level ?? 0.5);
+    if (opLvl) {
+      const idx = +opLvl[1] - 1;
+      // Modulate every outgoing stage of that operator, proportional to its
+      // nominal value so the depth means the same thing for carriers and
+      // modulators alike.
+      return this.gainsBySource[idx].map(g => ({ param: g.gain, scale: amount * g.gain.value }));
+    }
+
     const opRat = dest.match(/^op(\d)_ratio$/);
-    if (opRat) return amount * this.noteHz * (p.operators[+opRat[1] - 1]?.ratio ?? 1) * 0.06;
+    if (opRat) {
+      const idx = +opRat[1] - 1;
+      const param = this.operators[idx]?.getFrequencyParam();
+      if (!param) return [];
+      return [{ param, scale: amount * this.operators[idx].getFrequency() * 0.06 }];
+    }
+
     switch (dest) {
-      case 'filter_cutoff': return amount * p.filter.cutoff;
-      case 'filter_res':    return amount * p.filter.resonance * 2;
-      case 'amp':           return amount * p.volume * 0.5;
-      case 'pitch':         return amount * this.noteHz * 0.06;
-      default:              return amount;
+      case 'filter_cutoff':
+        return [{ param: this.filter.frequency, scale: amount * p.filter.cutoff }];
+      case 'filter_res':
+        return [{ param: this.filter.Q, scale: amount * p.filter.resonance * 2 }];
+      case 'amp':
+        return [{ param: this.output.gain, scale: amount * 0.5 }];
+      case 'pitch':
+        // Scale per operator by its own frequency, so a vibrato is the same
+        // number of cents on every operator rather than detuning them apart.
+        return this.operators
+          .map((op, i) => ({ op, i }))
+          .filter(({ i }) => p.operators[i]?.enabled)
+          .map(({ op }) => {
+            const param = op.getFrequencyParam();
+            return param ? { param, scale: amount * op.getFrequency() * 0.06 } : null;
+          })
+          .filter((t): t is ModTarget => t !== null);
+      default:
+        // fx_reverb / fx_delay / fx_chorus are global, so AudioEngine wires them
+        // on the FX bus rather than per voice.
+        return [];
     }
   }
 
   noteOff(time: number) {
     const p = this.patch;
+    let end = time;
+
     this.operators.forEach((op, i) => {
       if (!p.operators[i].enabled) return;
-      op.noteOff(time);
+      end = Math.max(end, op.noteOff(time));
     });
 
-    // Filter release
     if (p.filter.enabled) {
-      const fc = this.filter.frequency;
-      fc.cancelScheduledValues(time);
-      fc.setValueAtTime(fc.value, time);
-      fc.linearRampToValueAtTime(p.filter.cutoff, time + p.filter.release);
+      scheduleRelease(this.filterEnvGain.gain, p.filter.env, time, 0, this.velocity, this.semitone);
     }
 
-    // Fade output at longest release
-    const maxRel = Math.max(...p.operators.map(o => o.release));
-    const g = this.output.gain;
-    g.setValueAtTime(g.value, time);
-    g.linearRampToValueAtTime(0, time + maxRel + 0.05);
+    this._noteOffTime = time;
+    this._endTime = end;
 
+    this.lfoA.stop();
+    this.lfoB.stop();
+  }
+
+  /**
+   * Longest release across *enabled* operators. Disabled operators used to
+   * count, so a muted operator with a long release kept voices alive.
+   */
+  releaseTime(): number {
+    const rels = this.patch.operators
+      .filter(op => op.enabled)
+      .map(op => releaseDuration(op.env, this.semitone));
+    return rels.length ? Math.max(...rels) : 0.05;
+  }
+
+  /** Fade out fast — used when a voice is stolen, to avoid a click. */
+  steal(time: number, fadeTime = 0.012) {
+    const g = this.output.gain;
+    g.cancelScheduledValues(time);
+    g.setValueAtTime(g.value, time);
+    g.linearRampToValueAtTime(0, time + fadeTime);
+    this._noteOffTime = time;
+    this._endTime = time + fadeTime;
     this.lfoA.stop();
     this.lfoB.stop();
   }
 
   connectOperatorOutputsTo(targets: GainNode[]): void {
     for (let i = 0; i < Math.min(this.operators.length, targets.length); i++) {
-      this.operators[i].outputGain.connect(targets[i]);
+      this.operators[i].unitOut.connect(targets[i]);
     }
   }
 
   disconnectOperatorOutputsFrom(targets: GainNode[]): void {
     for (let i = 0; i < Math.min(this.operators.length, targets.length); i++) {
-      try { this.operators[i].outputGain.disconnect(targets[i]); } catch {}
+      try { this.operators[i].unitOut.disconnect(targets[i]); } catch {}
     }
   }
 
   dispose() {
     this.operators.forEach(op => op.dispose());
+    this.routeGains.forEach(g => { try { g.disconnect(); } catch {} });
+    this.routeGains = [];
+    this.gainsBySource = Array.from({ length: 6 }, () => []);
     this.lfoA.dispose();
     this.lfoB.dispose();
-    try { this.output.disconnect(); } catch {}
+    try { this.filterEnvSource.stop(); } catch {}
+    try { this.filterEnvSource.disconnect(); } catch {}
+    try { this.filterEnvGain.disconnect(); } catch {}
+    try { this.carrierMix.disconnect(); } catch {}
     try { this.filter.disconnect(); } catch {}
-    try { this.driveNode.disconnect(); } catch {}
+    try { this.output.disconnect(); } catch {}
   }
 
   isExpired(time: number): boolean {
-    // Check if all operators have finished
-    const maxRel = Math.max(...this.patch.operators.map(o => o.release));
-    return time > this._noteOffTime + maxRel + 0.1;
+    return time > this._endTime + 0.1;
   }
 
-  private _noteOffTime = 0;
   recordNoteOff(time: number) { this._noteOffTime = time; }
+  get noteOffTime(): number { return this._noteOffTime; }
 }

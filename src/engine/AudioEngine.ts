@@ -2,6 +2,7 @@ import { Voice } from './Voice';
 import { FxChain } from '../fx/FxChain';
 import { type PatchParams, DEFAULT_PATCH } from './Types';
 import { Arpeggiator } from './Arpeggiator';
+import { Lfo } from './Lfo';
 import { logger } from '../debug/Logger';
 
 const BASE_HZ = 440; // A4
@@ -25,6 +26,9 @@ export class AudioEngine {
   private opSumGains: GainNode[] = [];
   private opAnalysers: AnalyserNode[] = [];
   private fx!: FxChain;
+  private globalLfoA!: Lfo;
+  private globalLfoB!: Lfo;
+  // Insertion-ordered, so the first entry is always the oldest sounding voice.
   private voices = new Map<number, Voice>(); // semitone → voice
   public arp: Arpeggiator;
   private patch: PatchParams = { ...DEFAULT_PATCH };
@@ -56,6 +60,8 @@ export class AudioEngine {
 
     this.fx = new FxChain(this.ctx, this.patch.fx);
     this.fx.output.connect(this.masterGain);
+    this.globalLfoA = new Lfo(this.ctx);
+    this.globalLfoB = new Lfo(this.ctx);
     this.masterGain.connect(this.analyser);
     this.analyser.connect(this.ctx.destination);
 
@@ -102,14 +108,41 @@ export class AudioEngine {
     }
   }
 
+  /** Retire a voice: fade already scheduled, disconnect taps and free its nodes. */
+  private _retire(voice: Voice, afterSeconds: number) {
+    setTimeout(() => {
+      voice.disconnectOperatorOutputsFrom(this.opSumGains);
+      voice.dispose();
+    }, Math.max(0, afterSeconds) * 1000);
+  }
+
+  /**
+   * Drop the oldest sounding voice when the polyphony ceiling is reached.
+   * Without this, holding the sustain of a long-release patch grows the graph
+   * without bound — and unison multiplies voice count per note.
+   */
+  private _stealIfNeeded() {
+    const limit = Math.max(1, this.patch.polyphony);
+    while (this.voices.size >= limit) {
+      const oldest = this.voices.keys().next();
+      if (oldest.done) break;
+      const victim = this.voices.get(oldest.value)!;
+      logger.log(`voice steal: semi=${oldest.value} (limit=${limit})`);
+      victim.steal(this.ctx!.currentTime);
+      this.voices.delete(oldest.value);
+      this._retire(victim, 0.1);
+    }
+  }
+
   _noteOn(semitone: number, velocity: number) {
     if (!this.ctx) { logger.error('_noteOn: no AudioContext'); return; }
-    if (this.voices.has(semitone)) {
-      const old = this.voices.get(semitone)!;
-      old.disconnectOperatorOutputsFrom(this.opSumGains);
-      old.noteOff(this.ctx.currentTime);
-      setTimeout(() => old.dispose(), 2000);
+    const existing = this.voices.get(semitone);
+    if (existing) {
+      existing.steal(this.ctx.currentTime);
+      this.voices.delete(semitone);
+      this._retire(existing, 0.1);
     }
+    this._stealIfNeeded();
 
     const hz = BASE_HZ * Math.pow(2, (semitone + this.patch.transpose - BASE_SEMITONE) / 12);
     logger.log(`_noteOn semi=${semitone} hz=${hz.toFixed(1)}`);
@@ -128,14 +161,11 @@ export class AudioEngine {
     if (!voice) { logger.warn(`_noteOff: no voice for semi=${semitone}`); return; }
     logger.log(`_noteOff semi=${semitone}`);
     voice.noteOff(this.ctx.currentTime);
-    voice.recordNoteOff(this.ctx.currentTime);
     this.voices.delete(semitone);
     this.noteListeners.forEach(fn => fn());
-    const maxRel = Math.max(...this.patch.operators.map(o => o.release)) + 0.5;
-    setTimeout(() => {
-      voice.disconnectOperatorOutputsFrom(this.opSumGains);
-      voice.dispose();
-    }, maxRel * 1000);
+    // Release time comes from the voice's own enabled operators, not from every
+    // operator in the patch — a disabled op used to keep voices alive.
+    this._retire(voice, voice.releaseTime() + 0.5);
     this.onStateChange?.();
   }
 
@@ -143,11 +173,43 @@ export class AudioEngine {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;
     this.voices.forEach(v => {
-      v.disconnectOperatorOutputsFrom(this.opSumGains);
-      v.noteOff(t);
-      setTimeout(() => v.dispose(), 2000);
+      v.steal(t);
+      this._retire(v, 0.1);
     });
     this.voices.clear();
+  }
+
+  /**
+   * The FX bus is global, so fx_reverb / fx_delay / fx_chorus can't be driven by
+   * the per-voice LFOs — with several notes held, each voice's LFO would sum
+   * into the same param at multiple times the intended depth and in random
+   * phase. These two run free instead, rewired whenever the matrix changes.
+   */
+  private _rewireGlobalMod() {
+    if (!this.ctx) return;
+    this.globalLfoA.stop();
+    this.globalLfoB.stop();
+
+    const slots = this.patch.modMatrix.filter(s =>
+      s.enabled && (s.dest === 'fx_reverb' || s.dest === 'fx_delay' || s.dest === 'fx_chorus'));
+    if (!slots.length) return;
+
+    const t = this.ctx.currentTime;
+    const needA = slots.some(s => s.source === 'lfo1');
+    const needB = slots.some(s => s.source === 'lfo2');
+    if (needA) this.globalLfoA.start(this.patch.lfo1, t);
+    if (needB) this.globalLfoB.start(this.patch.lfo2, t);
+
+    for (const slot of slots) {
+      const lfo = slot.source === 'lfo1' ? this.globalLfoA
+                : slot.source === 'lfo2' ? this.globalLfoB : null;
+      if (!lfo) continue;
+      const depth = slot.source === 'lfo1' ? this.patch.lfo1.depth : this.patch.lfo2.depth;
+      const which = slot.dest === 'fx_reverb' ? 'reverb'
+                  : slot.dest === 'fx_delay'  ? 'delay' : 'chorus';
+      // Wet mix is 0..1, so a unit LFO swings it by at most half the range.
+      lfo.addConnection(this.fx.getWetParam(which), slot.amount * depth * 0.5);
+    }
   }
 
   loadPatch(patch: PatchParams) {
@@ -157,6 +219,7 @@ export class AudioEngine {
     this._init();
     this.masterGain.gain.value = patch.volume;
     this.fx.update(patch.fx);
+    this._rewireGlobalMod();
     this.onStateChange?.();
   }
 
@@ -165,6 +228,7 @@ export class AudioEngine {
     this._init();
     this.masterGain.gain.value = this.patch.volume;
     this.fx.update(this.patch.fx);
+    if (partial.modMatrix || partial.lfo1 || partial.lfo2) this._rewireGlobalMod();
     this.onStateChange?.();
   }
 
@@ -205,6 +269,8 @@ export class AudioEngine {
   dispose() {
     this.allNotesOff();
     this.arp?.stop();
+    this.globalLfoA?.dispose();
+    this.globalLfoB?.dispose();
     this.fx?.dispose();
     this.ctx?.close();
     this.ctx = null;

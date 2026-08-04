@@ -1,3 +1,9 @@
+import { type EnvParams, DEFAULT_ENV, adsrToEnv } from './Envelope';
+
+export type { EnvParams, EnvStage, EnvCurve } from './Envelope';
+
+export const PATCH_VERSION = 2;
+
 export type WaveType = 'sine' | 'triangle' | 'sawtooth' | 'square' | 'wavetable';
 export type FilterType = 'lowpass' | 'highpass' | 'bandpass' | 'notch';
 export type LfoShape = 'sine' | 'triangle' | 'sawtooth' | 'square' | 'random';
@@ -7,20 +13,28 @@ export type ModDest =
   | 'op1_ratio' | 'op2_ratio' | 'op3_ratio' | 'op4_ratio' | 'op5_ratio' | 'op6_ratio'
   | 'filter_cutoff' | 'filter_res' | 'pitch' | 'fx_reverb' | 'fx_delay' | 'fx_chorus' | 'amp';
 
+/**
+ * What an operator *is*. Operators are the universal primitive: the same six
+ * slots become DX-7 FM operators, Minimoog VCOs, an ESQ-1 wavetable DCO, or a
+ * D-50 PCM attack transient depending on this field.
+ *
+ * Only 'fm' is implemented today; the rest are defined so the v1→v2 migration
+ * happens once rather than once per phase.
+ */
+export type OpRole = 'fm' | 'vco' | 'noise' | 'wavetable' | 'pcm';
+
 export interface OperatorParams {
   enabled: boolean;
+  role: OpRole;
   wave: WaveType;
   wavetableData: number[] | null; // normalised -1..1, 2048 samples
   ratio: number;       // coarse ratio (0.5–16)
   fine: number;        // fine detune cents (-100..100)
   fixed: boolean;      // fixed freq mode
   fixedFreq: number;   // Hz when fixed
-  level: number;       // 0..1
+  level: number;       // 0..1 — carrier amplitude, or FM index when modulating
   feedback: number;    // 0..1 self-feedback
-  attack: number;      // s
-  decay: number;       // s
-  sustain: number;     // 0..1
-  release: number;     // s
+  env: EnvParams;
   karplusStrong: boolean;
   ksDecay: number;     // KS decay factor 0..1
 }
@@ -31,10 +45,7 @@ export interface FilterParams {
   cutoff: number;      // Hz
   resonance: number;   // 0..30
   envAmount: number;   // -1..1 (maps cutoff by ±4 octaves)
-  attack: number;
-  decay: number;
-  sustain: number;
-  release: number;
+  env: EnvParams;
   keytrack: number;    // 0..1
 }
 
@@ -62,18 +73,39 @@ export interface FxParams {
   eq:      { enabled: boolean; low: number; mid: number; high: number; midFreq: number };
 }
 
+/** How one operator feeds another (or the output). See Algorithms.ts. */
+export type RouteKind = 'fm' | 'am' | 'ring' | 'sync' | 'mix';
+
+export interface Route {
+  from: number;             // operator index 0-5
+  to: number | 'out';       // target operator index, or the voice output
+  kind: RouteKind;
+  amount: number;           // 0..1 multiplier on top of the source operator's level
+}
+
+/** Voice allocation. Minimoog-style mono needs glide + note priority; poly needs a ceiling. */
+export interface UnisonParams {
+  voices: number;      // 1 = off
+  detune: number;      // cents of spread across the stack
+  spread: number;      // 0..1 stereo spread
+}
+
 export interface PatchParams {
   name: string;
   author: string;
   tags: string[];
   version: number;
   algorithm: number;   // 1..32
+  routes: Route[] | null;  // custom routing; null = derive from `algorithm`
   operators: OperatorParams[];
   filter: FilterParams;
   lfo1: LfoParams;
   lfo2: LfoParams;
   modMatrix: ModSlot[];
   fx: FxParams;
+  polyphony: number;   // max simultaneous voices
+  glide: number;       // portamento time in seconds (0 = off)
+  unison: UnisonParams;
   pitchBend: number;   // semitones range
   transpose: number;   // semitones
   volume: number;      // 0..1
@@ -81,6 +113,7 @@ export interface PatchParams {
 
 export const DEFAULT_OPERATOR: OperatorParams = {
   enabled: true,
+  role: 'fm',
   wave: 'sine',
   wavetableData: null,
   ratio: 1,
@@ -89,10 +122,7 @@ export const DEFAULT_OPERATOR: OperatorParams = {
   fixedFreq: 440,
   level: 0.8,
   feedback: 0,
-  attack: 0.001,
-  decay: 0.3,
-  sustain: 0.5,
-  release: 0.3,
+  env: DEFAULT_ENV,
   karplusStrong: false,
   ksDecay: 0.995,
 };
@@ -103,10 +133,7 @@ export const DEFAULT_FILTER: FilterParams = {
   cutoff: 4000,
   resonance: 1,
   envAmount: 0.5,
-  attack: 0.01,
-  decay: 0.3,
-  sustain: 0,
-  release: 0.2,
+  env: adsrToEnv(0.01, 0.3, 0, 0.2),
   keytrack: 0.5,
 };
 
@@ -117,6 +144,12 @@ export const DEFAULT_LFO: LfoParams = {
   delay: 0.2,
   sync: true,
   swing: 0,
+};
+
+export const DEFAULT_UNISON: UnisonParams = {
+  voices: 1,
+  detune: 8,
+  spread: 0.5,
 };
 
 export const DEFAULT_FX: FxParams = {
@@ -131,10 +164,12 @@ export const DEFAULT_PATCH: PatchParams = {
   name: 'Untitled',
   author: '',
   tags: [],
-  version: 1,
+  version: PATCH_VERSION,
   algorithm: 1,
+  routes: null,
   operators: Array.from({ length: 6 }, (_, i) => ({
     ...DEFAULT_OPERATOR,
+    env: adsrToEnv(0.001, 0.3, 0.5, 0.3),
     level: i === 0 ? 1 : 0.8,
   })),
   filter: DEFAULT_FILTER,
@@ -142,6 +177,9 @@ export const DEFAULT_PATCH: PatchParams = {
   lfo2: { ...DEFAULT_LFO, rate: 0.3 },
   modMatrix: [],
   fx: DEFAULT_FX,
+  polyphony: 16,
+  glide: 0,
+  unison: DEFAULT_UNISON,
   pitchBend: 2,
   transpose: 0,
   volume: 0.7,

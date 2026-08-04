@@ -15,6 +15,8 @@ import { Keyboard } from './components/Keyboard';
 import { Scope } from './components/Scope';
 import { LogViewer } from './components/LogViewer';
 import { ALGORITHMS } from '../engine/Algorithms';
+import { adsrToEnv } from '../engine/Envelope';
+import type { OperatorParams, WaveType } from '../engine/Types';
 import { Knob } from './components/Knob';
 import {
   generateSeed,
@@ -109,7 +111,7 @@ export default function App() {
 
   const algo = ALGORITHMS.find(a => a.id === patch.algorithm) ?? ALGORITHMS[0];
 
-  const updateOp = (i: number, p: object) => {
+  const updateOp = (i: number, p: Partial<OperatorParams>) => {
     const ops = [...patch.operators];
     ops[i] = { ...ops[i], ...p };
     updatePatch({ operators: ops });
@@ -154,24 +156,33 @@ export default function App() {
   const handleOpRandom = useCallback((opIndex: number, seed: string, mode: RandomMode) => {
     const s = seed || String(generateSeed());
     const rng = mulberry32str(s);
-    const waves = mode === 'safe' ? ['sine','sine','sine','triangle'] : ['sine','triangle','sawtooth','square'];
+    const waves: WaveType[] = mode === 'safe'
+      ? ['sine','sine','sine','triangle']
+      : ['sine','triangle','sawtooth','square'];
     const safeRatios = [0.5, 1, 1.5, 2, 3, 4, 5, 6, 7, 8];
-    const pick = (arr: string[] | number[]) => arr[Math.floor(rng() * arr.length)];
+    const pick = <T,>(arr: T[]): T => arr[Math.floor(rng() * arr.length)];
     const range = (min: number, max: number) => min + rng() * (max - min);
     const bool = (p = 0.5) => rng() < p;
+
+    const isCarrier = algo.carriers.includes(opIndex);
     updateOp(opIndex, {
-      wave: pick(waves) as any,
-      ratio: mode === 'safe' ? pick(safeRatios) as number : range(0.5, 16),
+      wave: pick(waves),
+      ratio: mode === 'safe' ? pick(safeRatios) : range(0.5, 16),
       fine: mode === 'safe' ? range(-20, 20) : range(-100, 100),
-      level: range(0.3, 1),
+      // Modulator level is an FM index, which rises steeply — keep it lower than
+      // a carrier's amplitude or safe mode stops being safe.
+      level: isCarrier ? range(0.6, 1) : (mode === 'safe' ? range(0.2, 0.6) : range(0.1, 1)),
       feedback: mode === 'safe' ? range(0, 0.15) : range(0, 0.6),
-      attack: mode === 'safe' ? range(0.001, 0.1) : range(0.001, 2),
-      decay: mode === 'safe' ? range(0.05, 1.5) : range(0.001, 6),
-      sustain: range(0, 1),
-      release: mode === 'safe' ? range(0.05, 1.0) : range(0.001, 4),
+      env: adsrToEnv(
+        mode === 'safe' ? range(0.001, 0.1) : range(0.001, 2),
+        mode === 'safe' ? range(0.05, 1.5)  : range(0.001, 6),
+        range(0, 1),
+        mode === 'safe' ? range(0.05, 1.0)  : range(0.001, 4),
+        { velSens: mode === 'safe' ? range(0.4, 0.9) : rng() },
+      ),
       karplusStrong: mode === 'safe' ? false : bool(0.08),
     });
-  }, [patch]);
+  }, [algo, patch, updatePatch]);
 
   return (
     <div className="app-root">

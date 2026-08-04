@@ -2,6 +2,7 @@ import {
   type PatchParams, type OperatorParams, type FilterParams, type FxParams,
   type LfoParams, DEFAULT_PATCH, type WaveType, type FilterType, type LfoShape,
 } from './Types';
+import { adsrToEnv } from './Envelope';
 import { ALGORITHMS } from './Algorithms';
 
 // ── Seeded PRNG (mulberry32) ───────────────────────────────────────────────
@@ -60,22 +61,31 @@ export function randomOperator(ctx: RandomContext, index: number): OperatorParam
     : rRange(rng, 0.5, 16);
 
   const isCarrier = index === 0; // index 0 is always a carrier in most algos
-  const maxLevel  = isCarrier ? 1 : (mode === 'safe' ? 1.0 : 1.2);
+  // Level is amplitude for carriers but FM index for modulators, and index rises
+  // steeply — safe mode keeps modulators below the point where everything turns
+  // to hash. See levelToIndex() in Operator.ts.
+  const level = isCarrier
+    ? rRange(rng, 0.6, 1)
+    : (mode === 'safe' ? rRange(rng, 0.2, 0.6) : rRange(rng, 0.1, 1));
 
   return {
     enabled:         rBool(rng, index < 4 ? 0.85 : 0.5),
+    role:            'fm',
     wave:            rPick(rng, waves),
     wavetableData:   null,
     ratio,
     fine:            mode === 'safe' ? rRange(rng, -20, 20) : rRange(rng, -100, 100),
     fixed:           mode === 'safe' ? false : rBool(rng, 0.1),
     fixedFreq:       rPick(rng, [55, 110, 220, 440, 880, 1760]),
-    level:           rRange(rng, 0.3, maxLevel),
+    level,
     feedback:        mode === 'safe' ? rRange(rng, 0, 0.15) : rRange(rng, 0, 0.6),
-    attack:          mode === 'safe' ? rRange(rng, 0.001, 0.1)  : rRange(rng, 0.001, 2),
-    decay:           mode === 'safe' ? rRange(rng, 0.05, 1.5)   : rRange(rng, 0.001, 6),
-    sustain:         rRange(rng, 0, 1),
-    release:         mode === 'safe' ? rRange(rng, 0.05, 1.0)   : rRange(rng, 0.001, 4),
+    env: adsrToEnv(
+      mode === 'safe' ? rRange(rng, 0.001, 0.1) : rRange(rng, 0.001, 2),
+      mode === 'safe' ? rRange(rng, 0.05, 1.5)  : rRange(rng, 0.001, 6),
+      rRange(rng, 0, 1),
+      mode === 'safe' ? rRange(rng, 0.05, 1.0)  : rRange(rng, 0.001, 4),
+      { velSens: mode === 'safe' ? rRange(rng, 0.4, 0.9) : rng() },
+    ),
     karplusStrong:   mode === 'safe' ? false : rBool(rng, 0.08),
     ksDecay:         rRange(rng, 0.97, 0.9995),
   };
@@ -90,10 +100,12 @@ export function randomFilter(ctx: RandomContext): FilterParams {
     cutoff:     mode === 'safe' ? rRange(rng, 200, 8000) : rRange(rng, 20, 18000),
     resonance:  mode === 'safe' ? rRange(rng, 0.5, 8)   : rRange(rng, 0.1, 25),
     envAmount:  mode === 'safe' ? rRange(rng, 0, 0.7)   : rRange(rng, -1, 1),
-    attack:     rRange(rng, 0.001, 0.5),
-    decay:      rRange(rng, 0.05, 2),
-    sustain:    rRange(rng, 0, 0.8),
-    release:    rRange(rng, 0.05, 1.5),
+    env: adsrToEnv(
+      rRange(rng, 0.001, 0.5),
+      rRange(rng, 0.05, 2),
+      rRange(rng, 0, 0.8),
+      rRange(rng, 0.05, 1.5),
+    ),
     keytrack:   mode === 'safe' ? rRange(rng, 0, 0.7) : rRange(rng, 0, 1),
   };
 }

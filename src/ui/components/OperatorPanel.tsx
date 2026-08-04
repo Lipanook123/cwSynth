@@ -1,6 +1,8 @@
 import React from 'react';
 import type { OperatorParams, WaveType } from '../../engine/Types';
 import { Knob } from './Knob';
+import { AdsrKnobs, toggleEnvShape, isAdsrShaped } from './AdsrKnobs';
+import { levelToIndex } from '../../engine/Operator';
 import { RandomControls } from './RandomControls';
 import type { RandomMode } from '../../engine/Randomiser';
 
@@ -80,36 +82,62 @@ export const OperatorPanel: React.FC<Props> = ({ index, params, isCarrier, onCha
           fontFamily:'IBM Plex Mono', fontSize:8, cursor:'pointer', width:'100%',
         }}>karplus-strong</button>
 
-      {/* Knobs: ratio, fine, level, feedback */}
+      {/* Pitch: fixed-frequency operators ignore the played note entirely. */}
+      <button onClick={() => onChange({ fixed: !params.fixed })}
+        style={{
+          padding:'4px 0', borderRadius:3, border:`1px solid ${params.fixed ? col : 'var(--bord)'}`,
+          background: params.fixed ? col + '22' : 'none', color: params.fixed ? col : 'var(--muted)',
+          fontFamily:'IBM Plex Mono', fontSize:8, cursor:'pointer', width:'100%',
+        }}>{params.fixed ? 'fixed freq' : 'key track'}</button>
+
+      {/* Knobs: ratio/fixed freq, fine, level, feedback */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:4 }}>
-        <Knob value={params.ratio} min={0.5} max={16} step={0.01}
-          label="ratio" display={v => v.toFixed(2)} color={col}
-          onChange={v => onChange({ ratio: v })} size={40} />
+        {params.fixed ? (
+          <Knob value={params.fixedFreq} min={1} max={8000} step={1}
+            label="Hz" display={v => v >= 1000 ? (v/1000).toFixed(2)+'k' : Math.round(v)+''} color={col}
+            onChange={v => onChange({ fixedFreq: v })} size={40} />
+        ) : (
+          <Knob value={params.ratio} min={0.5} max={16} step={0.01}
+            label="ratio" display={v => v.toFixed(2)} color={col}
+            onChange={v => onChange({ ratio: v })} size={40} />
+        )}
         <Knob value={params.fine} min={-100} max={100} step={1}
           label="fine" display={v => (v > 0 ? '+' : '') + v + '¢'} color={col}
           onChange={v => onChange({ fine: v })} size={40} />
         <Knob value={params.level} min={0} max={1} step={0.01}
-          label="level" display={v => Math.round(v*100)+'%'} color={col}
-          onChange={v => onChange({ level: v })} size={40} />
+          label={isCarrier ? 'level' : 'index'}
+          display={v => isCarrier ? Math.round(v*100)+'%' : levelToIndex(v).toFixed(1)}
+          color={col} onChange={v => onChange({ level: v })} size={40} />
         <Knob value={params.feedback} min={0} max={1} step={0.01}
           label="fdbk" display={v => Math.round(v*100)+'%'} color={col}
           onChange={v => onChange({ feedback: v })} size={40} />
       </div>
 
-      {/* ADSR knobs */}
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:4 }}>
-        <Knob value={params.attack}  min={0.001} max={4} step={0.001}
-          label="A" display={v => v < 1 ? Math.round(v*1000)+'ms' : v.toFixed(1)+'s'} color={col}
-          onChange={v => onChange({ attack: v })} size={40} />
-        <Knob value={params.decay}   min={0.001} max={8} step={0.001}
-          label="D" display={v => v < 1 ? Math.round(v*1000)+'ms' : v.toFixed(1)+'s'} color={col}
-          onChange={v => onChange({ decay: v })} size={40} />
-        <Knob value={params.sustain} min={0} max={1} step={0.01}
-          label="S" display={v => Math.round(v*100)+'%'} color={col}
-          onChange={v => onChange({ sustain: v })} size={40} />
-        <Knob value={params.release} min={0.001} max={8} step={0.001}
-          label="R" display={v => v < 1 ? Math.round(v*1000)+'ms' : v.toFixed(1)+'s'} color={col}
-          onChange={v => onChange({ release: v })} size={40} />
+      {/* Envelope */}
+      <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+        <span style={{ fontSize:8, color:'var(--muted)', letterSpacing:'.12em', textTransform:'uppercase', flex:1 }}>
+          {isAdsrShaped(params.env) ? 'adsr' : 'rate / level'}
+        </span>
+        <button onClick={() => onChange({ env: toggleEnvShape(params.env) })}
+          style={{
+            padding:'2px 6px', borderRadius:3, border:'1px solid var(--bord)', background:'none',
+            color:'var(--muted)', fontFamily:'IBM Plex Mono', fontSize:8, cursor:'pointer',
+          }}>{isAdsrShaped(params.env) ? '→ 4-stage' : '→ adsr'}</button>
+      </div>
+      <AdsrKnobs env={params.env} color={col} maxTime={8}
+        onChange={env => onChange({ env })} />
+
+      {/* Keyboard response — the DX-7's per-operator scaling. */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:4 }}>
+        <Knob value={params.env.velSens} min={0} max={1} step={0.01}
+          label="vel" display={v => Math.round(v*100)+'%'} color={col}
+          onChange={v => onChange({ env: { ...params.env, velSens: v } })} size={40} />
+        <Knob value={params.env.keyRateScale} min={0} max={1} step={0.01}
+          label="rate scl" display={v => Math.round(v*100)+'%'} color={col}
+          onChange={v => onChange({ env: { ...params.env, keyRateScale: v } })} size={40} />
+        <Knob value={params.env.keyLevelScale} min={-1} max={1} step={0.01}
+          label="lvl scl" display={v => (v>=0?'+':'')+Math.round(v*100)+'%'} color={col}
+          onChange={v => onChange({ env: { ...params.env, keyLevelScale: v } })} size={40} />
       </div>
 
       {params.karplusStrong && (

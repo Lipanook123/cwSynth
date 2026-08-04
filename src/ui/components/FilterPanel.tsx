@@ -1,6 +1,7 @@
 import React from 'react';
 import type { FilterParams, FilterType } from '../../engine/Types';
 import { Knob } from './Knob';
+import { AdsrKnobs } from './AdsrKnobs';
 
 const FILTER_TYPES: FilterType[] = ['lowpass','highpass','bandpass','notch'];
 
@@ -44,14 +45,9 @@ export const FilterPanel: React.FC<Props> = ({ params, onChange }) => (
 
     <div style={{ borderTop:'1px solid var(--bord)', paddingTop:8 }}>
       <span style={{ fontSize:8, color:'var(--muted)', letterSpacing:'.12em', textTransform:'uppercase' }}>Envelope</span>
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:6, marginTop:8 }}>
-        {(['attack','decay','sustain','release'] as const).map(k => (
-          <Knob key={k} value={params[k]}
-            min={k === 'sustain' ? 0 : 0.001} max={k === 'sustain' ? 1 : 4} step={k === 'sustain' ? 0.01 : 0.001}
-            label={k[0].toUpperCase()}
-            display={k === 'sustain' ? v => Math.round(v*100)+'%' : v => v < 1 ? Math.round(v*1000)+'ms' : v.toFixed(1)+'s'}
-            color="var(--amber)" onChange={v => onChange({ [k]: v })} size={40} />
-        ))}
+      <div style={{ marginTop:8 }}>
+        <AdsrKnobs env={params.env} color="var(--amber)" maxTime={4}
+          onChange={env => onChange({ env })} />
       </div>
     </div>
   </div>
