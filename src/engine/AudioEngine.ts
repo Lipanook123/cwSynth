@@ -29,8 +29,14 @@ export class AudioEngine {
   private fx!: FxChain;
   private globalLfoA!: Lfo;
   private globalLfoB!: Lfo;
-  // Insertion-ordered, so the first entry is always the oldest sounding voice.
-  private voices = new Map<number, Voice>(); // semitone → voice
+  // Insertion-ordered, so the first entry is always the oldest sounding note.
+  // One note maps to a *stack* of voices — unison layers each get their own.
+  private stacks = new Map<number, Voice[]>(); // semitone → unison stack
+  /** Press order, for mono/legato note priority. */
+  private heldNotes: number[] = [];
+  /** Pitch of the last note, so the next one knows where to glide from. */
+  private lastHz = 0;
+  private lastVelocity = 0.8;
   public arp: Arpeggiator;
   private patch: PatchParams = { ...DEFAULT_PATCH };
   private onStateChange?: () => void;
@@ -113,6 +119,7 @@ export class AudioEngine {
 
   noteOn(semitone: number, velocity = 0.8) {
     this.resume();
+    this.lastVelocity = velocity;
     logger.log(`noteOn semi=${semitone} vel=${velocity.toFixed(2)} arp.enabled=${this.arp.enabled} ctx=${this.ctx?.state ?? 'null'}`);
     if (this.arp.enabled) {
       this.arp.addNote(semitone);
@@ -130,75 +137,225 @@ export class AudioEngine {
     }
   }
 
-  /** Retire a voice: fade already scheduled, disconnect taps and free its nodes. */
-  private _retire(voice: Voice, afterSeconds: number) {
+  /** Retire a stack: fade already scheduled, disconnect taps and free the nodes. */
+  private _retire(stack: Voice[], afterSeconds: number) {
     setTimeout(() => {
-      voice.disconnectOperatorOutputsFrom(this.opSumGains);
-      voice.dispose();
+      for (const v of stack) {
+        v.disconnectOperatorOutputsFrom(this.opSumGains);
+        v.dispose();
+      }
     }, Math.max(0, afterSeconds) * 1000);
   }
 
+  /** Total sounding voices, counting each unison layer separately. */
+  private _voiceCount(): number {
+    let n = 0;
+    for (const stack of this.stacks.values()) n += stack.length;
+    return n;
+  }
+
   /**
-   * Drop the oldest sounding voice when the polyphony ceiling is reached.
-   * Without this, holding the sustain of a long-release patch grows the graph
-   * without bound — and unison multiplies voice count per note.
+   * Drop oldest notes until the new one fits under the polyphony ceiling.
+   * Unison multiplies voices per note, so this counts layers rather than notes —
+   * a 7-voice unison patch at a limit of 16 gets two notes, not sixteen.
    */
-  private _stealIfNeeded() {
+  private _stealIfNeeded(incoming: number) {
     const limit = Math.max(1, this.patch.polyphony);
-    while (this.voices.size >= limit) {
-      const oldest = this.voices.keys().next();
+    while (this.stacks.size > 0 && this._voiceCount() + incoming > limit) {
+      const oldest = this.stacks.keys().next();
       if (oldest.done) break;
-      const victim = this.voices.get(oldest.value)!;
+      const victim = this.stacks.get(oldest.value)!;
       logger.log(`voice steal: semi=${oldest.value} (limit=${limit})`);
-      victim.steal(this.ctx!.currentTime);
-      this.voices.delete(oldest.value);
+      for (const v of victim) v.steal(this.ctx!.currentTime);
+      this.stacks.delete(oldest.value);
       this._retire(victim, 0.1);
     }
   }
 
+  private _hzFor(semitone: number, detuneCents = 0): number {
+    return BASE_HZ
+      * Math.pow(2, (semitone + this.patch.transpose - BASE_SEMITONE) / 12)
+      * Math.pow(2, detuneCents / 1200);
+  }
+
+  /**
+   * Detune offsets for a unison stack, in cents, spread symmetrically about the
+   * centre. An odd voice count keeps one layer exactly in tune, which stops the
+   * stack sounding uniformly sharp or flat.
+   */
+  private _unisonOffsets(count: number, detune: number): number[] {
+    if (count <= 1) return [0];
+    return Array.from({ length: count }, (_, i) =>
+      (i / (count - 1) - 0.5) * detune);
+  }
+
+  /** Stereo positions matching the detune spread, widest voices furthest out. */
+  private _unisonPans(count: number, spread: number): number[] {
+    if (count <= 1 || spread <= 0) return Array.from({ length: count }, () => 0);
+    return Array.from({ length: count }, (_, i) =>
+      (i / (count - 1) - 0.5) * 2 * spread);
+  }
+
+  /** Build and start one note's worth of voices (a unison stack). */
+  private _startStack(semitone: number, velocity: number, glideFromHz?: number): Voice[] {
+    const ctx = this.ctx!;
+    const u = this.patch.unison;
+    const count = Math.max(1, Math.round(u.voices));
+    const offsets = this._unisonOffsets(count, u.detune);
+    const pans = this._unisonPans(count, u.spread);
+    const glideTime = this.patch.glide;
+
+    const stack: Voice[] = [];
+    for (let i = 0; i < count; i++) {
+      const hz = this._hzFor(semitone, offsets[i]);
+      const voice = new Voice(ctx, this.patch, semitone, hz, {
+        pan: pans[i],
+        glideFromHz: glideFromHz ? glideFromHz * Math.pow(2, offsets[i] / 1200) : undefined,
+        glideTime,
+      });
+      // Stacked voices share the output budget, so a 7-voice unison is not
+      // seven times louder than a single one.
+      voice.output.gain.value = 1 / Math.sqrt(count);
+      voice.outlet.connect(this.fx.input);
+      voice.connectOperatorOutputsTo(this.opSumGains);
+      voice.noteOn(velocity, ctx.currentTime);
+      stack.push(voice);
+    }
+    return stack;
+  }
+
+  /** The held note that should be sounding, per the patch's note priority. */
+  private _priorityNote(): number | null {
+    if (!this.heldNotes.length) return null;
+    switch (this.patch.notePriority) {
+      case 'low':  return Math.min(...this.heldNotes);
+      case 'high': return Math.max(...this.heldNotes);
+      default:     return this.heldNotes[this.heldNotes.length - 1];
+    }
+  }
+
+  private get isMono(): boolean {
+    return this.patch.voiceMode === 'mono' || this.patch.voiceMode === 'legato';
+  }
+
   _noteOn(semitone: number, velocity: number) {
     if (!this.ctx) { logger.error('_noteOn: no AudioContext'); return; }
-    const existing = this.voices.get(semitone);
+
+    if (this.isMono) {
+      this.heldNotes = this.heldNotes.filter(n => n !== semitone);
+      this.heldNotes.push(semitone);
+      this._soundMono(velocity);
+      return;
+    }
+
+    const existing = this.stacks.get(semitone);
     if (existing) {
-      existing.steal(this.ctx.currentTime);
-      this.voices.delete(semitone);
+      for (const v of existing) v.steal(this.ctx.currentTime);
+      this.stacks.delete(semitone);
       this._retire(existing, 0.1);
     }
-    this._stealIfNeeded();
 
-    const hz = BASE_HZ * Math.pow(2, (semitone + this.patch.transpose - BASE_SEMITONE) / 12);
-    logger.log(`_noteOn semi=${semitone} hz=${hz.toFixed(1)}`);
-    const voice = new Voice(this.ctx, this.patch, semitone, hz);
-    voice.output.connect(this.fx.input);
-    voice.connectOperatorOutputsTo(this.opSumGains);
-    voice.noteOn(velocity, this.ctx.currentTime);
-    this.voices.set(semitone, voice);
+    const count = Math.max(1, Math.round(this.patch.unison.voices));
+    this._stealIfNeeded(count);
+
+    logger.log(`_noteOn semi=${semitone} unison=${count}`);
+    this.stacks.set(semitone, this._startStack(semitone, velocity));
+    this.lastHz = this._hzFor(semitone);
+    this.noteListeners.forEach(fn => fn());
+    this.onStateChange?.();
+  }
+
+  /**
+   * Sound whichever held note has priority.
+   *
+   * In `legato` mode an already-sounding stack is retuned rather than
+   * retriggered, so a phrase played without gaps gets one attack instead of one
+   * per note. `mono` always retriggers.
+   */
+  private _soundMono(velocity: number) {
+    const target = this._priorityNote();
+    if (target == null) return;
+
+    const ctx = this.ctx!;
+    const current = [...this.stacks.entries()][0];
+    const hz = this._hzFor(target);
+
+    if (current && this.patch.voiceMode === 'legato' && current[1].every(v => v.isSounding)) {
+      const [semi, stack] = current;
+      if (semi !== target) {
+        const offsets = this._unisonOffsets(stack.length, this.patch.unison.detune);
+        stack.forEach((v, i) => v.glideTo(
+          target,
+          hz * Math.pow(2, offsets[i] / 1200),
+          ctx.currentTime,
+          this.patch.glide,
+        ));
+        this.stacks.delete(semi);
+        this.stacks.set(target, stack);
+      }
+      this.lastHz = hz;
+      this.noteListeners.forEach(fn => fn());
+      this.onStateChange?.();
+      return;
+    }
+
+    // Retrigger: release whatever is sounding and start the priority note,
+    // gliding from the previous pitch.
+    const glideFrom = this.patch.glide > 0 ? this.lastHz : undefined;
+    if (current) {
+      for (const v of current[1]) v.steal(ctx.currentTime);
+      this.stacks.delete(current[0]);
+      this._retire(current[1], 0.1);
+    }
+    this.stacks.set(target, this._startStack(target, velocity, glideFrom));
+    this.lastHz = hz;
     this.noteListeners.forEach(fn => fn());
     this.onStateChange?.();
   }
 
   _noteOff(semitone: number) {
     if (!this.ctx) return;
-    const voice = this.voices.get(semitone);
-    if (!voice) { logger.warn(`_noteOff: no voice for semi=${semitone}`); return; }
+
+    if (this.isMono) {
+      this.heldNotes = this.heldNotes.filter(n => n !== semitone);
+      if (this.heldNotes.length) {
+        // Fall back to the next held note rather than going silent — the
+        // behaviour that lets you trill on a monosynth.
+        this._soundMono(this.lastVelocity);
+      } else {
+        const current = [...this.stacks.entries()][0];
+        if (current) {
+          for (const v of current[1]) v.noteOff(this.ctx.currentTime);
+          this.stacks.delete(current[0]);
+          this._retire(current[1], (current[1][0]?.releaseTime() ?? 0.1) + 0.5);
+        }
+        this.noteListeners.forEach(fn => fn());
+        this.onStateChange?.();
+      }
+      return;
+    }
+
+    const stack = this.stacks.get(semitone);
+    if (!stack) { logger.warn(`_noteOff: no voice for semi=${semitone}`); return; }
     logger.log(`_noteOff semi=${semitone}`);
-    voice.noteOff(this.ctx.currentTime);
-    this.voices.delete(semitone);
+    for (const v of stack) v.noteOff(this.ctx.currentTime);
+    this.stacks.delete(semitone);
     this.noteListeners.forEach(fn => fn());
     // Release time comes from the voice's own enabled operators, not from every
     // operator in the patch — a disabled op used to keep voices alive.
-    this._retire(voice, voice.releaseTime() + 0.5);
+    this._retire(stack, (stack[0]?.releaseTime() ?? 0.1) + 0.5);
     this.onStateChange?.();
   }
 
   allNotesOff() {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;
-    this.voices.forEach(v => {
-      v.steal(t);
-      this._retire(v, 0.1);
+    this.stacks.forEach(stack => {
+      for (const v of stack) v.steal(t);
+      this._retire(stack, 0.1);
     });
-    this.voices.clear();
+    this.stacks.clear();
+    this.heldNotes = [];
   }
 
   /**
@@ -256,7 +413,10 @@ export class AudioEngine {
 
   getPatch(): PatchParams { return this.patch; }
 
-  getActiveNotes(): ReadonlySet<number> { return new Set(this.voices.keys()); }
+  getActiveNotes(): ReadonlySet<number> { return new Set(this.stacks.keys()); }
+
+  /** Total sounding voices including unison layers — for the UI and tests. */
+  getVoiceCount(): number { return this._voiceCount(); }
 
   getAnalyser(): AnalyserNode | null { return this.analyser ?? null; }
 

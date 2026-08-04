@@ -56,7 +56,13 @@ const MINIMOOG_BASS: PatchParams = {
     envAmount: 0.55, keytrack: 0.35,
     a: 0.002, d: 0.22, s: 0.12, r: 0.2,
   }),
-  polyphony: 6,
+  // The real thing is monophonic with low-note priority, and its three
+  // oscillators are already detuned against each other — so no unison here,
+  // just a touch of glide.
+  voiceMode: 'mono',
+  notePriority: 'low',
+  glide: 0.04,
+  polyphony: 1,
   volume: 0.75,
 };
 
@@ -76,6 +82,12 @@ const MINIMOOG_LEAD: PatchParams = {
     envAmount: 0.4, keytrack: 0.5,
     a: 0.01, d: 0.5, s: 0.5, r: 0.3,
   }),
+  // Legato so a phrase played without gaps gets one attack, which is how lead
+  // lines on a Minimoog are actually played.
+  voiceMode: 'legato',
+  notePriority: 'last',
+  glide: 0.08,
+  polyphony: 1,
   lfo1: { shape: 'sine', rate: 5.5, depth: 0.25, delay: 0.6, sync: true, swing: 0 },
   modMatrix: [{ source: 'lfo1', dest: 'pitch', amount: 0.25, enabled: true }],
   fx: {
@@ -83,7 +95,6 @@ const MINIMOOG_LEAD: PatchParams = {
     reverb: { enabled: true, size: 0.4, damp: 0.5, mix: 0.16 },
     delay: { enabled: true, time: 0.32, feedback: 0.28, mix: 0.14, sync: false },
   },
-  polyphony: 4,
   volume: 0.7,
 };
 
@@ -114,7 +125,9 @@ const JP8_BRASS: PatchParams = {
     chorus: { enabled: true, rate: 0.5, depth: 0.35, mix: 0.4 },
     reverb: { enabled: true, size: 0.5, damp: 0.45, mix: 0.2 },
   },
-  polyphony: 8,
+  // Two layers per note for width without eating the whole voice budget.
+  unison: { voices: 2, detune: 9, spread: 0.5 },
+  polyphony: 12,
   volume: 0.7,
 };
 
@@ -142,7 +155,8 @@ const JP8_PAD: PatchParams = {
     chorus: { enabled: true, rate: 0.32, depth: 0.5, mix: 0.45 },
     reverb: { enabled: true, size: 0.8, damp: 0.35, mix: 0.35 },
   },
-  polyphony: 8,
+  unison: { voices: 2, detune: 11, spread: 0.7 },
+  polyphony: 12,
   volume: 0.62,
 };
 
@@ -173,7 +187,9 @@ const OBXA_PAD: PatchParams = {
     chorus: { enabled: true, rate: 0.28, depth: 0.55, mix: 0.5 },
     reverb: { enabled: true, size: 0.75, damp: 0.4, mix: 0.3 },
   },
-  polyphony: 8,
+  // Wide detuned stacking is most of the Oberheim signature.
+  unison: { voices: 3, detune: 16, spread: 0.85 },
+  polyphony: 12,
   volume: 0.62,
 };
 
@@ -207,7 +223,9 @@ const SYNC_LEAD: PatchParams = {
     delay: { enabled: true, time: 0.28, feedback: 0.3, mix: 0.16, sync: false },
     reverb: { enabled: true, size: 0.45, damp: 0.5, mix: 0.18 },
   },
-  polyphony: 4,
+  voiceMode: 'legato',
+  glide: 0.06,
+  polyphony: 1,
   volume: 0.65,
 };
 

@@ -253,15 +253,54 @@ defaults it, but writing it keeps the file explicit.
 
 ---
 
+## Voice allocation
+
+```json
+"voiceMode": "mono",
+"notePriority": "low",
+"glide": 0.04,
+"polyphony": 1,
+"unison": { "voices": 3, "detune": 14, "spread": 0.7 }
+```
+
+| `voiceMode` | Behaviour |
+|---|---|
+| `poly` | A voice per note, up to `polyphony`. The default. |
+| `mono` | One note at a time; every new note **retriggers** the envelopes. |
+| `legato` | One note at a time; overlapping notes **glide without retriggering**, so a phrase played without gaps gets a single attack. Release fully between notes to retrigger. |
+
+**`notePriority`** decides which held key wins in mono and legato: `last`
+(default), `low` (the Minimoog behaviour — basslines stay put while you play
+above them), or `high`. Releasing a key falls back to whatever is still held
+rather than going silent, which is what lets you trill.
+
+**`glide`** is portamento time in seconds. The ramp is exponential, so the slide
+is even in musical pitch — a linear ramp from 55 Hz to 880 Hz would spend nearly
+all its time in the top octave. Fixed-frequency operators do not glide.
+
+**`unison`** stacks `voices` detuned copies per note:
+
+- `detune` is the total spread in cents, end to end. Odd counts keep one layer
+  exactly in tune, so the stack doesn't sound uniformly sharp.
+- `spread` pans the layers across the stereo field, widest voices furthest out.
+- Each layer is a real voice and **counts against `polyphony`** — a 7-voice
+  unison patch at a limit of 16 gives you two notes. Raise `polyphony` to suit.
+- Stack gain is scaled by `1/√voices`, so turning unison up thickens the sound
+  without making it louder.
+
+Unison layers each get their own oscillator start phase and drift, so they
+decorrelate naturally rather than sounding like one detuned tone.
+
+---
+
 ## Global
 
 | Field | Notes |
 |---|---|
 | `volume` | `0..1`, applied once at the master output. |
-| `polyphony` | Voice ceiling; oldest note is stolen past it. Default 16. |
+| `polyphony` | Voice ceiling, counting unison layers. Oldest note is stolen past it. |
 | `transpose` | Semitones, applied to the played note. |
 | `pitchBend` | Stored but not yet read. |
-| `glide`, `unison` | Schema-only until the analog phase. |
 
 ### FX
 
@@ -282,7 +321,10 @@ operator a carrier. Set the operators to `role: 'vco'`, detune them against each
 other with `fine`, and shape with the filter.
 
 The `Minimoog Bass`, `Jupiter Brass`, `Jupiter Pad`, `OB-Xa Pad` and `Sync Lead`
-factory presets are all built this way and are the best starting points.
+factory presets are all built this way and are the best starting points. Note how
+they differ in voice allocation: the Minimoog patches are monophonic with glide
+(bass on low-note priority, lead on legato), while the Jupiter and OB-Xa patches
+are polyphonic with unison stacking for width.
 
 One trap: a patch that lists fewer than six operators gets the rest filled from
 defaults, and **those defaults are enabled**. Always set `"enabled": false`

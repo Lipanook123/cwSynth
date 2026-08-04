@@ -42,6 +42,7 @@ export class FakeBiquad extends FakeNode {
 export class FakeConstant extends FakeNode { offset = new FakeParam(1, 'offset'); start() {} stop() {} }
 export class FakeBufferSource extends FakeNode { buffer: unknown = null; start() {} stop() {} }
 export class FakeConvolver extends FakeNode { buffer: unknown = null; }
+export class FakeStereoPanner extends FakeNode { pan = new FakeParam(0, 'pan'); }
 export class FakeWaveShaper extends FakeNode { curve: unknown = null; oversample = 'none'; }
 /**
  * Stand-in for AudioWorkletNode. `parameters` is a Map of FakeParams, mirroring
@@ -101,6 +102,7 @@ export class FakeAudioContext {
   createConstantSource() { return new FakeConstant(); }
   createBufferSource() { return new FakeBufferSource(); }
   createConvolver() { return new FakeConvolver(); }
+  createStereoPanner() { return new FakeStereoPanner(); }
   createWaveShaper() { return new FakeWaveShaper(); }
   createAnalyser() { return new FakeAnalyser(); }
   createPeriodicWave() { return {}; }

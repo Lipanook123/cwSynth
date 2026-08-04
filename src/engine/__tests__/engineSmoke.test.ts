@@ -135,8 +135,8 @@ describe('engine smoke', () => {
     const engine = new AudioEngineCls();
     engine.loadPatch(normalisePatch({ transpose: 12 }));
     engine.noteOn(69, 0.8); // A4 + 12 semitones = A5 = 880 Hz
-    const voice = (engine as never as { voices: Map<number, { noteHz: number }> }).voices.get(69);
-    expect(voice!.noteHz).toBeCloseTo(880, 6);
+    const stack = (engine as never as { stacks: Map<number, { noteHz: number }[]> }).stacks.get(69);
+    expect(stack![0].noteHz).toBeCloseTo(880, 6);
     engine.dispose();
   });
 
@@ -146,10 +146,10 @@ describe('engine smoke', () => {
     engine.noteOn(60, 0.8);
     const e = engine as never as {
       masterGain: { gain: { value: number } };
-      voices: Map<number, { output: { gain: { value: number } } }>;
+      stacks: Map<number, { output: { gain: { value: number } } }[]>;
     };
     expect(e.masterGain.gain.value).toBe(0.5);
-    expect(e.voices.get(60)!.output.gain.value).toBe(1);
+    expect(e.stacks.get(60)![0].output.gain.value).toBe(1);
     engine.dispose();
   });
 });

@@ -86,6 +86,8 @@ const ROLES = ['fm', 'vco', 'noise', 'wavetable', 'pcm'] as const;
 const FILTER_TYPES = ['lowpass', 'highpass', 'bandpass', 'notch'] as const;
 const FILTER_MODELS = ['biquad', 'ladder', 'svf'] as const;
 const NOISE_TYPES = ['white', 'pink'] as const;
+const VOICE_MODES = ['poly', 'mono', 'legato'] as const;
+const NOTE_PRIORITIES = ['last', 'low', 'high'] as const;
 const LFO_SHAPES = ['sine', 'triangle', 'sawtooth', 'square', 'random'] as const;
 const DIST_MODES = ['soft', 'hard', 'bit'] as const;
 const ROUTE_KINDS = ['fm', 'am', 'ring', 'sync', 'mix'] as const;
@@ -243,8 +245,10 @@ export function normalisePatch(raw: unknown): PatchParams {
     lfo2:      mergeLfo(p.lfo2, DEFAULT_PATCH.lfo2),
     modMatrix: mergeModMatrix(p.modMatrix),
     fx:        mergeFx(p.fx, DEFAULT_FX),
-    polyphony: Math.max(1, Math.round(num(p.polyphony, DEFAULT_PATCH.polyphony))),
-    glide:     Math.max(0, num(p.glide, DEFAULT_PATCH.glide)),
+    polyphony:    Math.max(1, Math.round(num(p.polyphony, DEFAULT_PATCH.polyphony))),
+    voiceMode:    str(p.voiceMode, VOICE_MODES, DEFAULT_PATCH.voiceMode),
+    notePriority: str(p.notePriority, NOTE_PRIORITIES, DEFAULT_PATCH.notePriority),
+    glide:        Math.max(0, num(p.glide, DEFAULT_PATCH.glide)),
     unison:    mergeUnison(p.unison, DEFAULT_UNISON),
     pitchBend: num(p.pitchBend, DEFAULT_PATCH.pitchBend),
     transpose: num(p.transpose, DEFAULT_PATCH.transpose),
