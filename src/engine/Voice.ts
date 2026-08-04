@@ -12,9 +12,21 @@ interface ModTarget { param: AudioParam; scale: number }
 /** Cutoff envelope depth: envAmount 1.0 opens the filter by four octaves. */
 const FILTER_ENV_OCTAVES = 4;
 
+export interface VoiceOptions {
+  /** Stereo position, -1..1. Only creates a panner when non-zero. */
+  pan?: number;
+  /** Pitch to glide from on note-on, in Hz. Omit to start at pitch. */
+  glideFromHz?: number;
+  /** Portamento time in seconds. */
+  glideTime?: number;
+}
+
 export class Voice {
   private ctx: AudioContext;
   public output: GainNode;
+  /** Last node in the voice chain — the panner when there is one. */
+  public outlet: AudioNode;
+  private panner: StereoPannerNode | null = null;
   private operators: Operator[];
   private carrierMix: GainNode;
   private filter: VoiceFilter;
@@ -31,11 +43,19 @@ export class Voice {
   private routeGains: GainNode[] = [];
   /** Outgoing route gains per source operator, so opN_level can modulate them. */
   private gainsBySource: GainNode[][] = Array.from({ length: 6 }, () => []);
+  private opts: VoiceOptions;
   private velocity = 1;
   private _noteOffTime = 0;
   private _endTime = Infinity;
 
-  constructor(ctx: AudioContext, patch: PatchParams, semitone: number, hz: number) {
+  constructor(
+    ctx: AudioContext,
+    patch: PatchParams,
+    semitone: number,
+    hz: number,
+    opts: VoiceOptions = {},
+  ) {
+    this.opts = opts;
     this.ctx = ctx;
     this.patch = patch;
     this.semitone = semitone;
@@ -47,6 +67,17 @@ export class Voice {
     // would square it.
     this.output = ctx.createGain();
     this.output.gain.value = 1;
+
+    // Unison spread pans each stacked voice across the stereo field. Only build
+    // the panner when it would do something — most patches are a single voice.
+    if (opts.pan) {
+      this.panner = ctx.createStereoPanner();
+      this.panner.pan.value = Math.max(-1, Math.min(1, opts.pan));
+      this.output.connect(this.panner);
+      this.outlet = this.panner;
+    } else {
+      this.outlet = this.output;
+    }
 
     this.carrierMix = ctx.createGain();
     this.carrierMix.gain.value = 1;
@@ -159,10 +190,21 @@ export class Voice {
       this.operators[i].noteOn(this.noteHz, velocity, this.semitone, time);
     });
 
-    // 2. Now the frequency params exist, so routing can be built.
+    // 2. Portamento: start at the previous note's pitch and slide into place.
+    //    Done before routing so the FM index gains are computed against the
+    //    destination frequency, which is where the note spends its life.
+    const { glideFromHz, glideTime = 0 } = this.opts;
+    if (glideFromHz && glideTime > 0) {
+      p.operators.forEach((op, i) => {
+        if (!op.enabled) return;
+        this.operators[i].glideTo(this.noteHz, time, glideTime, glideFromHz);
+      });
+    }
+
+    // 3. Now the frequency params exist, so routing can be built.
     this._buildRouting(time);
 
-    // 3. Filter envelope.
+    // 4. Filter envelope.
     if (p.filter.enabled) {
       const fp = p.filter;
       const baseCutoff = fp.cutoff * Math.pow(2, fp.keytrack * (this.semitone - 60) / 12);
@@ -172,7 +214,7 @@ export class Voice {
       scheduleEnvelope(this.filterEnvGain.gain, fp.env, time, envRange, velocity, this.semitone);
     }
 
-    // 4. LFOs + mod matrix.
+    // 5. LFOs + mod matrix.
     const activeSlots = p.modMatrix.filter(s => s.enabled);
     const hasLfo1 = activeSlots.some(s => s.source === 'lfo1');
     const hasLfo2 = activeSlots.some(s => s.source === 'lfo2');
@@ -189,6 +231,37 @@ export class Voice {
       }
     }
   }
+
+  /**
+   * Change pitch on a sounding voice without retriggering anything — the legato
+   * behaviour of a monosynth. Envelopes keep running, so a phrase played legato
+   * has one attack rather than one per note.
+   */
+  glideTo(semitone: number, hz: number, time: number, glideTime: number) {
+    this.semitone = semitone;
+    this.noteHz = hz;
+    this.patch.operators.forEach((op, i) => {
+      if (!op.enabled) return;
+      this.operators[i].glideTo(hz, time, glideTime);
+    });
+
+    // Key tracking means the filter's base cutoff follows the note too.
+    const fp = this.patch.filter;
+    if (fp.enabled && fp.keytrack) {
+      const baseCutoff = fp.cutoff * Math.pow(2, fp.keytrack * (semitone - 60) / 12);
+      const param = this.filter.cutoffParam;
+      param.cancelScheduledValues(time);
+      param.setValueAtTime(Math.max(1e-3, param.value), time);
+      if (glideTime > 0) {
+        param.exponentialRampToValueAtTime(Math.max(1e-3, baseCutoff), time + glideTime);
+      } else {
+        param.setValueAtTime(baseCutoff, time);
+      }
+    }
+  }
+
+  /** True while the voice has not been released — legato only reuses live voices. */
+  get isSounding(): boolean { return this._endTime === Infinity; }
 
   /**
    * Resolve a mod destination to the AudioParams it drives, each with the swing
@@ -300,6 +373,7 @@ export class Voice {
 
   dispose() {
     this.operators.forEach(op => op.dispose());
+    if (this.panner) { try { this.panner.disconnect(); } catch {} this.panner = null; }
     this.routeGains.forEach(g => { try { g.disconnect(); } catch {} });
     this.routeGains = [];
     this.gainsBySource = Array.from({ length: 6 }, () => []);

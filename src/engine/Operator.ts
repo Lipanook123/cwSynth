@@ -94,6 +94,47 @@ export class Operator {
   /** Current running frequency — used by Voice to scale FM index into Hz. */
   getFrequency(): number { return this.freqHz; }
 
+  /**
+   * Portamento: slide this operator's pitch to the frequency for `toHz`.
+   *
+   * Works for both source types because a worklet's `frequency` param behaves
+   * exactly like an oscillator's. Exponential, so the glide is linear in
+   * musical pitch rather than in Hz — a linear ramp from 55 Hz to 880 Hz would
+   * spend almost all its time in the top octave.
+   *
+   * A fixed-frequency operator ignores this, as it ignores the played note.
+   */
+  /**
+   * @param fromHz Optional starting pitch. Omit to glide from wherever the
+   *   oscillator currently is, which is what legato needs.
+   *
+   * Start and ramp are scheduled in one call on purpose: doing it as two
+   * (set-start, then glide) meant the glide's own `cancelScheduledValues`
+   * wiped the start value, and the note silently began at its destination.
+   */
+  glideTo(toHz: number, startTime: number, glideTime: number, fromHz?: number) {
+    if (this.params.fixed) return;
+    const target = this.frequencyFor(toHz);
+    const param = this.getFrequencyParam();
+    this.freqHz = target;
+
+    if (param) {
+      const start = fromHz !== undefined
+        ? this.frequencyFor(fromHz)
+        : param.value;
+      param.cancelScheduledValues(startTime);
+      param.setValueAtTime(Math.max(1e-3, start), startTime);
+      if (glideTime > 0) {
+        param.exponentialRampToValueAtTime(Math.max(1e-3, target), startTime + glideTime);
+      } else {
+        param.setValueAtTime(target, startTime);
+      }
+    }
+
+    // Self-feedback depth tracks frequency, so it has to move with the glide.
+    this.feedbackGain.gain.setValueAtTime(this._feedbackHz(), startTime + glideTime);
+  }
+
   updateParams(params: Partial<OperatorParams>) {
     Object.assign(this.params, params);
     const t = this.ctx.currentTime;

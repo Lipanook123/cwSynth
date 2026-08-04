@@ -58,6 +58,7 @@ src/
       Scope.tsx         — oscilloscope (canvas, Web Audio analyser)
       LfoPanel.tsx      — LFO 1/2 shape, rate, depth, delay, swing
       ModMatrix.tsx     — mod routing editor grouped by destination
+      VoicePanel.tsx    — voice mode, note priority, glide, unison
       AdsrKnobs.tsx     — envelope editor; ADSR knobs or per-stage rate/level grid
       Knob.tsx          — reusable rotary knob (drag, scroll, double-click to type)
       RandomControls.tsx — dice button, seed input, safe/wild toggle
@@ -138,9 +139,19 @@ free-running LFO pair on the FX bus rather than per voice.
 
 ### Voice Management
 
-Voices are allocated per note and torn down after their longest *enabled*
-operator release. A configurable polyphony ceiling (default 16) steals the oldest
-sounding voice with a short fade.
+Three allocation modes. **Poly** gives a voice per note up to a configurable
+ceiling, stealing the oldest with a short fade. **Mono** plays one note at a time
+and retriggers on each; **legato** retunes the sounding voice instead, so a
+phrase played without gaps gets a single attack. Mono and legato keep a held-note
+stack with last/low/high priority, so releasing a key falls back to whatever is
+still down rather than going silent.
+
+**Glide** is exponential portamento, even in musical pitch rather than in Hz.
+**Unison** stacks detuned copies of each note, spread across the stereo field,
+with gain scaled by 1/√voices so thickening does not mean getting louder. Each
+layer is a real voice and counts against the polyphony ceiling.
+
+Voices are torn down after their longest *enabled* operator release.
 
 ### Arpeggiator
 
@@ -212,11 +223,6 @@ format did not need a second breaking change later.
 The routing matrix accepts `am` and `ring`, but the engine skips them with a
 warning. Ring modulation is needed for the D-50.
 
-### Voice architecture
-Unison (stacked detuned voices), glide/portamento and monophonic note priority
-are in the schema (`unison`, `glide`) with no engine support yet. All three are
-prerequisites for convincing Minimoog and OB-Xa emulation.
-
 ### Mod sources beyond the LFOs
 `env1`–`env6`, `velocity` and `mod` are typed and shown in the UI as disabled.
 Only `lfo1` and `lfo2` are wired.
@@ -237,7 +243,6 @@ option.
 
 | Phase | Feature | Targets |
 |---|---|---|
-| 2b | Unison + detune, glide, mono note priority, per-voice drift | Minimoog, OB-Xa |
 | 3 | Free envelopes, third LFO, full mod-source coverage, ring mod, ROM wavetables, PCM transients | ESQ-1, D-50 |
 | 4 | Pitch bend, mod wheel, aftertouch, wavetable editor | All |
 

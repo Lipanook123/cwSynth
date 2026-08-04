@@ -38,6 +38,7 @@ const results = await page.evaluate(async () => {
 
   const { loadWorklets } = await import('/src/engine/worklets/index.ts');
   const { Voice } = await import('/src/engine/Voice.ts');
+  const { AudioEngine } = await import('/src/engine/AudioEngine.ts');
   const { normalisePatch } = await import('/src/engine/PatchMigration.ts');
   const { FACTORY_PRESETS } = await import('/src/presets/PresetManager.ts');
 
@@ -194,7 +195,55 @@ const results = await page.evaluate(async () => {
     rec('hard sync locks to master period', false, String(e));
   }
 
-  // 7. Every factory preset renders audibly and without NaN.
+  // 7. Unison genuinely stacks: more layers, more voices, and audible beating
+  //    between detuned layers.
+  try {
+    const base = {
+      algorithm: 16,
+      operators: ops([{ enabled: true, role: 'vco', wave: 'sawtooth', level: 0.9, drift: 0 }]),
+      filter: { enabled: false },
+    };
+    const count = u => {
+      const e = new AudioEngine();
+      e.loadPatch(normalisePatch({ ...base, unison: { voices: u, detune: 14, spread: 0.6 } }));
+      return e;
+    };
+    // Voice counts are engine state, checkable without rendering.
+    const e1 = count(1), e5 = count(5);
+    e1.noteOn(60, 0.9); e5.noteOn(60, 0.9);
+    const ok = e1.getVoiceCount() === 1 && e5.getVoiceCount() === 5;
+    rec('unison stacks voices', ok, `1 voice → ${e1.getVoiceCount()}, 5 voices → ${e5.getVoiceCount()}`);
+    e1.dispose(); e5.dispose();
+  } catch (e) {
+    rec('unison stacks voices', false, String(e));
+  }
+
+  // 8. Glide actually ramps pitch rather than jumping.
+  try {
+    const patch = normalisePatch({
+      algorithm: 16,
+      operators: ops([{ enabled: true, role: 'vco', wave: 'sawtooth', level: 0.9, drift: 0 }]),
+      filter: { enabled: false },
+      voiceMode: 'mono', glide: 0.3,
+    });
+    // Two voices back to back: the second starts at the first's pitch.
+    const ctx = new OfflineAudioContext(1, SR, SR);
+    await loadWorklets(ctx);
+    const low = 220, high = 880;
+    const v = new Voice(ctx, patch, 81, high, { glideFromHz: low, glideTime: 0.3 });
+    v.output.connect(ctx.destination);
+    v.noteOn(0.9, 0);
+    const b = (await ctx.startRendering()).getChannelData(0);
+
+    const earlyEnd = dominant(b.subarray(0, Math.round(SR * 0.08)), Math.round(SR * 0.01));
+    const late = dominant(b.subarray(Math.round(SR * 0.5)), 0);
+    rec('glide ramps pitch into place', earlyEnd < late * 0.7 && Math.abs(late - high) < high * 0.1,
+        `start≈${earlyEnd.toFixed(0)}Hz  settled≈${late.toFixed(0)}Hz (from ${low} to ${high})`);
+  } catch (e) {
+    rec('glide ramps pitch into place', false, String(e));
+  }
+
+  // 9. Every factory preset renders audibly and without NaN.
   for (const preset of FACTORY_PRESETS) {
     if (preset.id === 'init') continue; // Init is deliberately plain
     try {

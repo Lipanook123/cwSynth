@@ -9,6 +9,17 @@ export type FilterType = 'lowpass' | 'highpass' | 'bandpass' | 'notch';
 /** Filter character. `biquad` is the stock Web Audio node; the others are worklets. */
 export type FilterModel = 'biquad' | 'ladder' | 'svf';
 export type NoiseType = 'white' | 'pink';
+
+/**
+ * How notes are allocated.
+ * - `poly`   — a voice per note, up to `polyphony`
+ * - `mono`   — one voice; every new note retriggers the envelopes
+ * - `legato` — one voice; overlapping notes glide without retriggering
+ */
+export type VoiceMode = 'poly' | 'mono' | 'legato';
+
+/** Which held note wins in mono/legato when several are down. */
+export type NotePriority = 'last' | 'low' | 'high';
 export type LfoShape = 'sine' | 'triangle' | 'sawtooth' | 'square' | 'random';
 export type ModSource = 'lfo1' | 'lfo2' | 'env1' | 'env2' | 'env3' | 'env4' | 'env5' | 'env6' | 'velocity' | 'mod';
 export type ModDest =
@@ -121,6 +132,8 @@ export interface PatchParams {
   modMatrix: ModSlot[];
   fx: FxParams;
   polyphony: number;   // max simultaneous voices
+  voiceMode: VoiceMode;
+  notePriority: NotePriority;
   glide: number;       // portamento time in seconds (0 = off)
   unison: UnisonParams;
   pitchBend: number;   // semitones range
@@ -204,6 +217,8 @@ export const DEFAULT_PATCH: PatchParams = {
   modMatrix: [],
   fx: DEFAULT_FX,
   polyphony: 16,
+  voiceMode: 'poly',
+  notePriority: 'last',
   glide: 0,
   unison: DEFAULT_UNISON,
   pitchBend: 2,

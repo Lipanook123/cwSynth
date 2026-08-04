@@ -9,6 +9,7 @@ import { FxPanel } from './components/FxPanel';
 import { ArpPanel } from './components/ArpPanel';
 import { LfoPanel } from './components/LfoPanel';
 import { ModMatrix } from './components/ModMatrix';
+import { VoicePanel } from './components/VoicePanel';
 import { ScopePanel } from './components/ScopePanel';
 import { PresetBrowser } from './components/PresetBrowser';
 import { RandomControls } from './components/RandomControls';
@@ -26,7 +27,7 @@ import {
 } from '../engine/Randomiser';
 import type { RandomMode } from '../engine/Randomiser';
 
-type Tab = 'operators' | 'algorithm' | 'filter' | 'fx' | 'arp' | 'lfo' | 'mod' | 'scope' | 'presets';
+type Tab = 'operators' | 'algorithm' | 'filter' | 'fx' | 'arp' | 'lfo' | 'mod' | 'voice' | 'scope' | 'presets';
 const TABS: { id: Tab; label: string }[] = [
   { id: 'operators', label: 'Operators' },
   { id: 'algorithm', label: 'Algorithm' },
@@ -35,6 +36,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'arp',       label: 'Arp'       },
   { id: 'lfo',       label: 'LFO'       },
   { id: 'mod',       label: 'Mod'       },
+  { id: 'voice',     label: 'Voice'     },
   { id: 'scope',     label: 'Scope'     },
   { id: 'presets',   label: 'Presets'   },
 ];
@@ -292,6 +294,10 @@ export default function App() {
 
         {tab === 'mod' && (
           <ModMatrix patch={patch} onChange={updatePatch} />
+        )}
+
+        {tab === 'voice' && (
+          <VoicePanel patch={patch} onChange={updatePatch} />
         )}
 
         {tab === 'scope' && <ScopePanel />}
