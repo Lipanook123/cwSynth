@@ -13,6 +13,74 @@ Schema version 2.
 
 ---
 
+## The deliverable: a `.cwsyn` file
+
+A patch is **one JSON object in a plain-text file with a `.cwsyn` extension**.
+There is no wrapper, no header, no array — the top level of the file *is* the
+patch object shown in §2.
+
+| | |
+|---|---|
+| **Extension** | `.cwsyn` — the convention, and what the app's export produces. |
+| **Format** | Plain UTF-8 JSON. Nothing about the format is special; the extension is just a label. |
+| **Also accepted on import** | `.json`. The file picker accepts `.cwsyn,.json`, and the parser only ever does `JSON.parse`. Use `.cwsyn` unless you have a reason not to. |
+| **Encoding** | Standard JSON only. **No comments, no trailing commas** — the parser is `JSON.parse`, which rejects both. |
+| **Indentation** | Irrelevant to the app. Its own export uses 2-space indent. |
+| **Minimum valid file** | `{}` — every field has a default. `{"name":"Tiny"}` imports as a complete 6-operator patch. |
+
+### Filename
+
+The filename carries no meaning to the engine, with one exception noted below.
+The app's *export* derives it from the patch's `name` field by replacing runs of
+whitespace with underscores:
+
+```
+name: "Jump Brass"   →   Jump_Brass.cwsyn
+name: "E. Piano"     →   E._Piano.cwsyn
+```
+
+Matching that convention when authoring by hand is sensible but not required —
+`jump-brass.cwsyn` or `my patch.cwsyn` both import fine.
+
+### The `name` field is what the user actually sees
+
+On import the patch is added to the preset list under its **internal `name`
+field**, not its filename. The filename is only used as a fallback when `name`
+is missing or empty:
+
+```
+name: "Jump Brass"  in  anything.cwsyn   →  listed as "Jump Brass"
+name: ""            in  anything.cwsyn   →  listed as "anything"
+```
+
+**Always set a meaningful `name`.** A patch with `name: ""` saved as
+`patch1.cwsyn` shows up as "patch1".
+
+### How a file gets into the synth
+
+Presets tab → **import .cwsyn** → pick the file. It is validated, migrated if
+it is an older schema version, added to the user preset list, and loaded
+immediately.
+
+If `JSON.parse` fails the app reports `Invalid .cwsyn file` and nothing is
+loaded. If the JSON parses but fields are missing, wrong-typed, or use unknown
+enum values, **it will not error** — every such field is silently replaced with
+its default. Observed behaviour:
+
+```
+{"name":"Tiny"}                     →  imports fine, 6 operators, version 2
+{"algorithm":"nonsense"}            →  algorithm 1
+{"filter":{"model":"bogus"}}        →  model "biquad"
+{"operators":[{"role":"zzz"}]}      →  role "fm"
+{"operators":[{"level":"high"}]}    →  level 1.0  (op 1's default)
+```
+
+**A patch that imports without complaint is not necessarily the patch you
+intended.** A typo in an enum name is indistinguishable from omitting the field.
+Check the result against the validation checklist in §14.
+
+---
+
 # 1. The rules that matter most
 
 Read this section before writing anything. Each item silently produces a wrong
@@ -185,7 +253,7 @@ Six operator slots. Full object (again `jsonc` — the `env` is elided):
 | `fine` | −100 – +100 (cents) | `0` | Fine detune. |
 | `fixed` | boolean | `false` | When true the operator ignores the played note. |
 | `fixedFreq` | 1 – 8000 (Hz) | `440` | Frequency when `fixed` is true. |
-| `level` | 0 – 1 | `0.8` | **Amplitude if carrier, FM index if modulator.** See §4.2. |
+| `level` | 0 – 1 | `1.0` (op 1) / `0.8` (ops 2–6) | **Amplitude if carrier, FM index if modulator.** See §4.2. Note the per-slot default differs. |
 | `feedback` | 0 – 1 | `0` | Self-modulation depth. |
 | `pulseWidth` | 0.02 – 0.98 | `0.5` | Duty cycle. `vco` role only. |
 | `drift` | 0 – 1 | `0` | Slow random pitch wander, up to ±12 cents. `vco` role only. |
