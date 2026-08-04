@@ -6,6 +6,9 @@ export const PATCH_VERSION = 2;
 
 export type WaveType = 'sine' | 'triangle' | 'sawtooth' | 'square' | 'wavetable';
 export type FilterType = 'lowpass' | 'highpass' | 'bandpass' | 'notch';
+/** Filter character. `biquad` is the stock Web Audio node; the others are worklets. */
+export type FilterModel = 'biquad' | 'ladder' | 'svf';
+export type NoiseType = 'white' | 'pink';
 export type LfoShape = 'sine' | 'triangle' | 'sawtooth' | 'square' | 'random';
 export type ModSource = 'lfo1' | 'lfo2' | 'env1' | 'env2' | 'env3' | 'env4' | 'env5' | 'env6' | 'velocity' | 'mod';
 export type ModDest =
@@ -37,13 +40,27 @@ export interface OperatorParams {
   env: EnvParams;
   karplusStrong: boolean;
   ksDecay: number;     // KS decay factor 0..1
+  /** Pulse width for `vco` role with a square/pulse wave. 0.5 = square. */
+  pulseWidth: number;
+  /** 0..1 analog pitch instability. Stops stacked voices sounding identical. */
+  drift: number;
+  /** Noise colour for the `noise` role. */
+  noiseType: NoiseType;
 }
 
 export interface FilterParams {
   enabled: boolean;
+  model: FilterModel;
   type: FilterType;
   cutoff: number;      // Hz
-  resonance: number;   // 0..30
+  /**
+   * Meaning depends on `model`: biquad reads it as Q (0..30), while ladder and
+   * svf normalise it to 0..1 where 1 self-oscillates. Voice maps between them.
+   */
+  resonance: number;
+  slope: 12 | 24;      // ladder/svf only
+  drive: number;       // 0..1 input saturation, ladder/svf only
+  hpfCutoff: number;   // series non-resonant highpass; 20 = off (Jupiter-8 topology)
   envAmount: number;   // -1..1 (maps cutoff by ±4 octaves)
   env: EnvParams;
   keytrack: number;    // 0..1
@@ -125,13 +142,22 @@ export const DEFAULT_OPERATOR: OperatorParams = {
   env: DEFAULT_ENV,
   karplusStrong: false,
   ksDecay: 0.995,
+  pulseWidth: 0.5,
+  drift: 0,
+  noiseType: 'white',
 };
 
 export const DEFAULT_FILTER: FilterParams = {
   enabled: false,
+  // Defaults to the stock biquad so every patch written before the worklets
+  // existed sounds exactly as it did. Analog templates opt into 'ladder'.
+  model: 'biquad',
   type: 'lowpass',
   cutoff: 4000,
   resonance: 1,
+  slope: 24,
+  drive: 0,
+  hpfCutoff: 20,
   envAmount: 0.5,
   env: adsrToEnv(0.01, 0.3, 0, 0.2),
   keytrack: 0.5,

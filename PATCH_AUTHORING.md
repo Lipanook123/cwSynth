@@ -47,7 +47,7 @@ Six operators. Each is either a **carrier** (reaches the output) or a
 
 | Field | Notes |
 |---|---|
-| `role` | `fm` is implemented. `vco`, `noise`, `wavetable`, `pcm` are reserved for later phases and currently behave as `fm`. |
+| `role` | `fm`, `vco` and `noise` are implemented. `wavetable` and `pcm` are reserved and currently behave as `fm`. |
 | `wave` | `sine`, `triangle`, `sawtooth`, `square`, `wavetable`. Non-sine modulators get dense fast — sine is the DX-7 default for a reason. |
 | `ratio` | Multiple of the played note. Integers give harmonic timbres; non-integers (1.99, 3.5, 7.13) give inharmonic, bell-like ones. |
 | `fine` | ±100 cents. A few cents between two carriers gives slow beating. |
@@ -77,6 +77,27 @@ Modulator levels above ~0.6 turn most patches to hash. Start around 0.3–0.5.
 
 Depth is scaled by the modulator's own frequency, so a patch keeps its timbre
 across the keyboard instead of getting duller as you play higher.
+
+### Operator roles
+
+| Role | What it is |
+|---|---|
+| `fm` | Clean band-limited oscillator — the DX-7 operator. Cannot do PWM or sync. |
+| `vco` | Analog oscillator (AudioWorklet): PolyBLEP saw/pulse/tri/sine, pulse-width modulation, hard sync, free-running start phase and drift. |
+| `noise` | White or pink noise via `noiseType`. Has no frequency, so nothing can modulate its pitch and it cannot be an FM target. |
+
+`vco` operators add three fields:
+
+- **`pulseWidth`** (0.02–0.98) — duty cycle when `wave` is `square`. 0.5 is a
+  square; moving it is what gives a Jupiter-8 pad its motion. Route an LFO to it
+  for classic PWM.
+- **`drift`** (0–1) — slow random pitch wander, up to about 12 cents. A small
+  amount (0.2–0.4) stops stacked oscillators sounding like a single digital tone.
+- Start phase is randomised per note. `OscillatorNode` always starts at phase 0,
+  which is a real part of why the `fm` role sounds more static when layered.
+
+If the worklets have not loaded, `vco` transparently falls back to a stock
+oscillator — the patch still sounds, it just loses PWM, sync and drift.
 
 ### Karplus-Strong
 
@@ -151,27 +172,55 @@ For custom topologies, set `routes` to an explicit edge list and it overrides
 ]
 ```
 
-`kind` may be `fm`, `am`, `ring`, `sync`, or `mix`. Only `fm` and `mix` are
-implemented today; the others are accepted by the schema and skipped with a
-warning until the analog phase lands.
+`kind` may be `fm`, `am`, `ring`, `sync`, or `mix`. `fm`, `mix` and `sync` are
+implemented; `am` and `ring` are accepted by the schema and skipped with a
+warning until the D-50 phase.
+
+**Hard sync** (`kind: 'sync'`) restarts the target's waveform on every cycle of
+the source, so the pitch you hear is the *source's* while the timbre follows the
+target's own frequency. Sweeping the target's `ratio` gives the classic sync
+sweep. The target must be a `vco` — a stock oscillator's phase is unreachable,
+which is exactly why the worklet oscillator exists. Sync routes to any other role
+are skipped with a warning.
+
+Note the source of a sync route is usually **not** also routed to the output; see
+the `Sync Lead` factory preset.
 
 ---
 
 ## Filter
 
-One resonant biquad per voice (12 dB/oct), inserted after the carrier mix.
+One filter per voice, inserted after the carrier mix, in one of three models.
 
 ```json
 "filter": {
-  "enabled": true, "type": "lowpass", "cutoff": 800, "resonance": 4,
+  "enabled": true, "model": "ladder", "type": "lowpass",
+  "cutoff": 800, "resonance": 19, "slope": 24, "drive": 0.4,
+  "hpfCutoff": 90,
   "envAmount": 0.6, "keytrack": 0.3,
   "env": { "...": "as above" }
 }
 ```
 
+| `model` | Character |
+|---|---|
+| `biquad` | Stock Web Audio node. Clean and neutral, never self-oscillates. **The default**, so patches written before the analog phase are unchanged. Often the right choice for FM patches. |
+| `ladder` | Moog-style 4-pole ladder (AudioWorklet). Self-oscillates at full resonance, loses low end as resonance rises, and saturates when driven. This is the Minimoog/Jupiter-8 sound. |
+| `svf` | State-variable (AudioWorklet). Softer and more open — the Oberheim/Prophet flavour, and the right pick for OB-Xa. |
+
+- **`resonance`** is stored on the biquad's 0–30 Q scale for backwards
+  compatibility. The analog models normalise it internally, self-oscillating at
+  30. The UI shows a percentage when an analog model is selected.
+- **`slope`** (12 or 24 dB/oct) applies to the analog models only.
+- **`drive`** (0–1) saturates the filter input. Analog models only.
+- **`hpfCutoff`** inserts a non-resonant highpass *before* the main filter — the
+  Jupiter-8 topology, for thinning the low end of a brass patch. 20 means off.
+
 `envAmount` is ±1 and maps to ±4 octaves of cutoff movement, applied as an
 additive offset so it stacks with `keytrack` and with any LFO routed to
 `filter_cutoff`. `keytrack` of 1.0 makes cutoff follow the keyboard exactly.
+
+If the worklets have not loaded, `ladder` and `svf` fall back to a biquad.
 
 ---
 
@@ -222,6 +271,23 @@ is momentarily expensive but does now take effect.
 
 Arpeggiator settings are **not** part of the patch — they live in the UI only and
 are not saved to `.cwsyn`.
+
+---
+
+## Building a subtractive patch
+
+FM patches use algorithms to stack operators; a subtractive patch wants them all
+mixed straight to the filter. That is **algorithm 16** — fully additive, every
+operator a carrier. Set the operators to `role: 'vco'`, detune them against each
+other with `fine`, and shape with the filter.
+
+The `Minimoog Bass`, `Jupiter Brass`, `Jupiter Pad`, `OB-Xa Pad` and `Sync Lead`
+factory presets are all built this way and are the best starting points.
+
+One trap: a patch that lists fewer than six operators gets the rest filled from
+defaults, and **those defaults are enabled**. Always set `"enabled": false`
+explicitly on operators you are not using, or they will sound as sine waves
+underneath everything.
 
 ---
 

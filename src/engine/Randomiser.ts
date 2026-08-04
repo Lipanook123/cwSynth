@@ -88,6 +88,9 @@ export function randomOperator(ctx: RandomContext, index: number): OperatorParam
     ),
     karplusStrong:   mode === 'safe' ? false : rBool(rng, 0.08),
     ksDecay:         rRange(rng, 0.97, 0.9995),
+    pulseWidth:      rRange(rng, 0.2, 0.8),
+    drift:           mode === 'safe' ? rRange(rng, 0, 0.2) : rRange(rng, 0, 1),
+    noiseType:       rPick(rng, ['white', 'pink'] as const),
   };
 }
 
@@ -96,6 +99,11 @@ export function randomFilter(ctx: RandomContext): FilterParams {
   const types: FilterType[] = ['lowpass', 'highpass', 'bandpass', 'notch'];
   return {
     enabled:    rBool(rng, mode === 'safe' ? 0.4 : 0.6),
+    // Randomised patches get the analog filters too — that is most of the fun.
+    model:      rPick(rng, ['biquad', 'ladder', 'ladder', 'svf'] as const),
+    slope:      rPick(rng, [12, 24] as const),
+    drive:      mode === 'safe' ? rRange(rng, 0, 0.3) : rRange(rng, 0, 1),
+    hpfCutoff:  rBool(rng, 0.25) ? rRange(rng, 40, 400) : 20,
     type:       mode === 'safe' ? rPick(rng, ['lowpass', 'lowpass', 'highpass'] as FilterType[]) : rPick(rng, types),
     cutoff:     mode === 'safe' ? rRange(rng, 200, 8000) : rRange(rng, 20, 18000),
     resonance:  mode === 'safe' ? rRange(rng, 0.5, 8)   : rRange(rng, 0.1, 25),

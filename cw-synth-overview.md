@@ -100,6 +100,34 @@ Per-voice biquad (12 dB/oct) inserted between the carrier mix and the output. Su
   as an additive offset so it composes with key tracking and LFO modulation
 - Key tracking (0–100%, scales cutoff with MIDI note)
 
+### Analog Oscillators and Filters (AudioWorklet)
+
+Three things are impossible with Web Audio's stock nodes: hard sync (an
+`OscillatorNode`'s phase is unreachable), pulse-width modulation (there is no
+pulse oscillator), and a self-oscillating resonant ladder (cascaded biquads have
+entirely the wrong resonance behaviour). Two worklet processors close that gap.
+
+**`cw-analog-osc`** — PolyBLEP sawtooth, pulse, triangle and sine with a-rate
+frequency and pulse width, hard sync via an audio-rate input, random start phase,
+and slow pitch drift. Measured at roughly 50× less aliasing than a naive
+oscillator at the same pitch.
+
+**`cw-ladder-filter`** — a Moog-style 4-pole ladder using a zero-delay-feedback
+(TPT) topology with a tanh-limited feedback path, plus a state-variable model for
+the softer Oberheim character. Both offer 12/24 dB slopes, lowpass/highpass/
+bandpass/notch, input drive, and self-oscillation at full resonance.
+
+The DSP itself lives in plain classes under `src/engine/dsp/`, so it is unit
+tested over sample buffers with no browser involved; the worklets are thin
+wrappers. Because a worklet's `AudioParam`s behave exactly like an oscillator's
+or a biquad's, FM routing, envelopes and the mod matrix all work against them
+unchanged.
+
+Worklet modules load asynchronously while `noteOn` is synchronous, so the engine
+preloads them on mount (an `AudioContext` may be created suspended without a user
+gesture) and falls back transparently to stock nodes if they are unavailable — a
+patch always makes sound.
+
 ### LFOs and Mod Matrix
 
 Two per-voice LFOs (sine, triangle, sawtooth, square, random) with rate, depth,
@@ -175,21 +203,19 @@ User presets are saved to `localStorage`. Patches can be exported as `.cwsyn` JS
 
 ## Not Yet Implemented
 
-### Analog oscillator + filter (worklets)
-Hard sync, pulse-width modulation, and a self-oscillating ladder/SVF filter
-cannot be built from Web Audio's stock nodes. Two `AudioWorklet` processors are
-planned: `ladder-filter` (Moog ZDF ladder, 2/4-pole switchable, self-oscillation,
-tanh drive) and `analog-osc` (PolyBLEP saw/pulse/tri, PWM, hard sync,
-free-running phase, drift). These unlock the Minimoog, Jupiter-8 and OB-Xa.
+### Operator roles beyond `fm`, `vco` and `noise`
+`OperatorParams.role` is defined as `fm | vco | noise | wavetable | pcm`. The
+first three are implemented; `wavetable` and `pcm` are in the schema so the patch
+format did not need a second breaking change later.
 
-### Operator roles beyond `fm`
-`OperatorParams.role` is defined as `fm | vco | noise | wavetable | pcm`. Only
-`fm` is implemented; the others are in the schema so the patch format did not
-need a second breaking change later.
+### Route kinds beyond `fm`, `mix` and `sync`
+The routing matrix accepts `am` and `ring`, but the engine skips them with a
+warning. Ring modulation is needed for the D-50.
 
-### Route kinds beyond `fm` and `mix`
-The routing matrix accepts `am`, `ring` and `sync`, but the engine skips them
-with a warning. Ring modulation is needed for the D-50 and Jupiter-8.
+### Voice architecture
+Unison (stacked detuned voices), glide/portamento and monophonic note priority
+are in the schema (`unison`, `glide`) with no engine support yet. All three are
+prerequisites for convincing Minimoog and OB-Xa emulation.
 
 ### Mod sources beyond the LFOs
 `env1`–`env6`, `velocity` and `mod` are typed and shown in the UI as disabled.
@@ -198,10 +224,6 @@ Only `lfo1` and `lfo2` are wired.
 ### Pitch bend / mod wheel
 `pitchBend` is in the patch type but never read. MIDI CC messages are not
 handled.
-
-### Glide and unison
-`glide` and `unison` are in the schema with no engine support yet. Both are
-prerequisites for convincing Minimoog and OB-Xa emulation.
 
 ### Wavetable editor
 `Operator.setWavetable()` performs a DFT and builds a `PeriodicWave`, and
@@ -215,9 +237,9 @@ option.
 
 | Phase | Feature | Targets |
 |---|---|---|
-| 2 | Ladder/SVF filter worklet, analog oscillator worklet, noise, glide, unison, drift | Minimoog, Jupiter-8, OB-Xa |
+| 2b | Unison + detune, glide, mono note priority, per-voice drift | Minimoog, OB-Xa |
 | 3 | Free envelopes, third LFO, full mod-source coverage, ring mod, ROM wavetables, PCM transients | ESQ-1, D-50 |
-| 4 | Pitch bend, mod wheel, aftertouch, wavetable editor, per-synth templates | All |
+| 4 | Pitch bend, mod wheel, aftertouch, wavetable editor | All |
 
 ---
 

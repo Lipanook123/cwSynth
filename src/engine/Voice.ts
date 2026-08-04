@@ -1,7 +1,8 @@
 import { Operator, levelToIndex } from './Operator';
 import { expandAlgorithm } from './Algorithms';
-import type { PatchParams, FilterParams, ModDest, Route } from './Types';
+import type { PatchParams, ModDest, Route } from './Types';
 import { scheduleEnvelope, scheduleRelease, releaseDuration } from './Envelope';
+import { VoiceFilter } from './VoiceFilter';
 import { Lfo } from './Lfo';
 import { logger } from '../debug/Logger';
 
@@ -16,7 +17,7 @@ export class Voice {
   public output: GainNode;
   private operators: Operator[];
   private carrierMix: GainNode;
-  private filter: BiquadFilterNode;
+  private filter: VoiceFilter;
   private filterEnvSource: ConstantSourceNode;
   private filterEnvGain: GainNode;
   public semitone: number;
@@ -50,8 +51,7 @@ export class Voice {
     this.carrierMix = ctx.createGain();
     this.carrierMix.gain.value = 1;
 
-    this.filter = ctx.createBiquadFilter();
-    this._applyFilterParams(patch.filter);
+    this.filter = new VoiceFilter(ctx, patch.filter);
 
     // Filter envelope as an additive offset on cutoff, so it composes with both
     // key tracking and any LFO routed to filter_cutoff.
@@ -60,7 +60,7 @@ export class Voice {
     this.filterEnvGain = ctx.createGain();
     this.filterEnvGain.gain.value = 0;
     this.filterEnvSource.connect(this.filterEnvGain);
-    this.filterEnvGain.connect(this.filter.frequency);
+    this.filterEnvGain.connect(this.filter.cutoffParam);
     this.filterEnvSource.start();
 
     this.operators = patch.operators.map(op => new Operator(ctx, op));
@@ -71,17 +71,11 @@ export class Voice {
     // Fixed part of the chain. Operator routing is built in noteOn, once the
     // oscillators exist and their frequency params are reachable.
     if (patch.filter.enabled) {
-      this.carrierMix.connect(this.filter);
-      this.filter.connect(this.output);
+      this.carrierMix.connect(this.filter.input);
+      this.filter.output.connect(this.output);
     } else {
       this.carrierMix.connect(this.output);
     }
-  }
-
-  private _applyFilterParams(fp: FilterParams) {
-    this.filter.type = fp.type;
-    this.filter.frequency.value = fp.cutoff;
-    this.filter.Q.value = fp.resonance;
   }
 
   /**
@@ -115,8 +109,22 @@ export class Voice {
       const tgt = this.operators[route.to];
       if (!tgt) continue;
 
+      if (route.kind === 'sync') {
+        // Hard sync: the source's waveform drives the target's sync input, and
+        // the target restarts its cycle on each rising edge. Only VCO operators
+        // have a sync input — the stock OscillatorNode's phase is unreachable,
+        // which is the whole reason the worklet oscillator exists.
+        const syncIn = tgt.getSyncInput();
+        if (!syncIn) {
+          logger.warn(`sync route to op${route.to + 1} ignored: target is not a VCO`);
+          continue;
+        }
+        src.unitOut.connect(syncIn);
+        continue;
+      }
+
       if (route.kind !== 'fm') {
-        // ring / am / sync arrive with the analog and D-50 phases.
+        // ring / am arrive with the D-50 phase.
         logger.warn(`route kind '${route.kind}' not implemented, skipping`);
         continue;
       }
@@ -159,8 +167,8 @@ export class Voice {
       const fp = p.filter;
       const baseCutoff = fp.cutoff * Math.pow(2, fp.keytrack * (this.semitone - 60) / 12);
       const envRange = baseCutoff * (Math.pow(2, fp.envAmount * FILTER_ENV_OCTAVES) - 1);
-      this.filter.frequency.cancelScheduledValues(time);
-      this.filter.frequency.setValueAtTime(baseCutoff, time);
+      this.filter.cutoffParam.cancelScheduledValues(time);
+      this.filter.cutoffParam.setValueAtTime(baseCutoff, time);
       scheduleEnvelope(this.filterEnvGain.gain, fp.env, time, envRange, velocity, this.semitone);
     }
 
@@ -208,9 +216,13 @@ export class Voice {
 
     switch (dest) {
       case 'filter_cutoff':
-        return [{ param: this.filter.frequency, scale: amount * p.filter.cutoff }];
+        return [{ param: this.filter.cutoffParam, scale: amount * p.filter.cutoff }];
       case 'filter_res':
-        return [{ param: this.filter.Q, scale: amount * p.filter.resonance * 2 }];
+        return [{
+          param: this.filter.resonanceParam,
+          // Scale differs by model: worklets run resonance 0..1, biquad 0..30.
+          scale: amount * this.filter.resonanceModScale(p.filter.resonance),
+        }];
       case 'amp':
         return [{ param: this.output.gain, scale: amount * 0.5 }];
       case 'pitch':
@@ -297,7 +309,7 @@ export class Voice {
     try { this.filterEnvSource.disconnect(); } catch {}
     try { this.filterEnvGain.disconnect(); } catch {}
     try { this.carrierMix.disconnect(); } catch {}
-    try { this.filter.disconnect(); } catch {}
+    this.filter.dispose();
     try { this.output.disconnect(); } catch {}
   }
 

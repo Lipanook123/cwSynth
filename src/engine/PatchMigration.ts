@@ -84,6 +84,8 @@ function envFromV1(raw: Raw, fallback: EnvParams): EnvParams {
 const WAVES = ['sine', 'triangle', 'sawtooth', 'square', 'wavetable'] as const;
 const ROLES = ['fm', 'vco', 'noise', 'wavetable', 'pcm'] as const;
 const FILTER_TYPES = ['lowpass', 'highpass', 'bandpass', 'notch'] as const;
+const FILTER_MODELS = ['biquad', 'ladder', 'svf'] as const;
+const NOISE_TYPES = ['white', 'pink'] as const;
 const LFO_SHAPES = ['sine', 'triangle', 'sawtooth', 'square', 'random'] as const;
 const DIST_MODES = ['soft', 'hard', 'bit'] as const;
 const ROUTE_KINDS = ['fm', 'am', 'ring', 'sync', 'mix'] as const;
@@ -104,6 +106,9 @@ function mergeOperator(raw: unknown, fallback: OperatorParams): OperatorParams {
     env:           envFromV1(raw, fallback.env),
     karplusStrong: bool(raw.karplusStrong, fallback.karplusStrong),
     ksDecay:       num(raw.ksDecay, fallback.ksDecay),
+    pulseWidth:    num(raw.pulseWidth, fallback.pulseWidth),
+    drift:         num(raw.drift, fallback.drift),
+    noiseType:     str(raw.noiseType, NOISE_TYPES, fallback.noiseType),
   };
 }
 
@@ -111,9 +116,13 @@ function mergeFilter(raw: unknown, fallback: FilterParams): FilterParams {
   if (!isObj(raw)) return { ...fallback, env: { ...fallback.env } };
   return {
     enabled:    bool(raw.enabled, fallback.enabled),
+    model:      str(raw.model, FILTER_MODELS, fallback.model),
     type:       str(raw.type, FILTER_TYPES, fallback.type),
     cutoff:     num(raw.cutoff, fallback.cutoff),
     resonance:  num(raw.resonance, fallback.resonance),
+    slope:      num(raw.slope, fallback.slope) < 18 ? 12 : 24,
+    drive:      num(raw.drive, fallback.drive),
+    hpfCutoff:  num(raw.hpfCutoff, fallback.hpfCutoff),
     envAmount:  num(raw.envAmount, fallback.envAmount),
     env:        envFromV1(raw, fallback.env),
     keytrack:   num(raw.keytrack, fallback.keytrack),

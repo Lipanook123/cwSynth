@@ -1,5 +1,12 @@
 import type { OperatorParams } from './Types';
 import { scheduleEnvelope, scheduleRelease, releaseDuration } from './Envelope';
+import { ANALOG_OSC_PROCESSOR, workletsReady } from './worklets';
+import { NoiseGen } from './dsp/AnalogOsc';
+
+/** Shape indices as ordered in analog-osc.worklet.ts. */
+const OSC_SHAPE_INDEX: Record<string, number> = {
+  sawtooth: 0, pulse: 1, square: 1, triangle: 2, sine: 3,
+};
 
 /**
  * Modulation index at operator level 1.0. The DX-7 tops out around 12; 10 keeps
@@ -36,7 +43,12 @@ export function levelToIndex(level: number): number {
  */
 export class Operator {
   private ctx: AudioContext;
+  /** Stock oscillator, used by the `fm` role and as the `vco` fallback. */
   private osc: OscillatorNode | null = null;
+  /** Worklet oscillator, used by the `vco` role when worklets are available. */
+  private vco: AudioWorkletNode | null = null;
+  /** Looping noise buffer, used by the `noise` role. */
+  private noise: AudioBufferSourceNode | null = null;
   private envGain: GainNode;        // envelope, 0..1
   private feedbackGain: GainNode;   // self-feedback depth in Hz
   private feedbackDelay: DelayNode;
@@ -86,6 +98,11 @@ export class Operator {
     Object.assign(this.params, params);
     const t = this.ctx.currentTime;
     this.feedbackGain.gain.setValueAtTime(this._feedbackHz(), t);
+    if (this.vco) {
+      this.vco.parameters.get('pulseWidth')!.setValueAtTime(this.params.pulseWidth, t);
+      this.vco.parameters.get('shape')!.setValueAtTime(OSC_SHAPE_INDEX[this.params.wave] ?? 0, t);
+      this.vco.parameters.get('drift')!.setValueAtTime(this.params.drift, t);
+    }
     if (this.osc && !this.params.karplusStrong) {
       if (this.periodicWave && this.params.wave === 'wavetable') {
         this.osc.setPeriodicWave(this.periodicWave);
@@ -137,19 +154,20 @@ export class Operator {
       return;
     }
 
-    this.osc = this.ctx.createOscillator();
-    this.osc.frequency.value = this.freqHz;
-
-    if (p.wave === 'wavetable' && this.periodicWave) {
-      this.osc.setPeriodicWave(this.periodicWave);
+    if (p.role === 'noise') {
+      this._startNoise(t);
+    } else if (p.role === 'vco' && workletsReady(this.ctx)) {
+      this._startVco();
     } else {
-      this.osc.type = (p.wave === 'wavetable' ? 'sine' : p.wave) as OscillatorType;
+      this._startOscillator(t);
     }
 
-    this.osc.connect(this.envGain);
-    this.feedbackGain.connect(this.osc.frequency);
-    this.feedbackGain.gain.setValueAtTime(this._feedbackHz(), t);
-    this.osc.start(t);
+    // Self-feedback binds to whichever source exposes a frequency param.
+    const freqParam = this.getFrequencyParam();
+    if (freqParam) {
+      this.feedbackGain.connect(freqParam);
+      this.feedbackGain.gain.setValueAtTime(this._feedbackHz(), t);
+    }
 
     // Envelope drives the unit-scale gain. Peak is 1 — level is applied by Voice.
     scheduleEnvelope(this.envGain.gain, p.env, t, 1, velocity, semitone);
@@ -166,9 +184,13 @@ export class Operator {
       this.ksNoise = null;
     }
 
-    if (!this.osc) return time;
     const osc = this.osc;
+    const vco = this.vco;
+    const noise = this.noise;
     this.osc = null;
+    this.vco = null;
+    this.noise = null;
+    if (!osc && !vco && !noise) return time;
 
     let endTime: number;
     if (immediate) {
@@ -180,13 +202,82 @@ export class Operator {
       endTime = scheduleRelease(this.envGain.gain, p.env, time, 1, this.velocity, this.semitone);
     }
 
-    try { osc.stop(endTime + 0.05); } catch {}
+    if (osc) { try { osc.stop(endTime + 0.05); } catch {} }
+    if (noise) { try { noise.stop(endTime + 0.05); } catch {} }
+    if (vco) {
+      // A worklet node has no stop(); tell the processor to retire so it can be
+      // collected instead of running silently for the life of the context.
+      const stopAt = Math.max(0, (endTime + 0.05 - this.ctx.currentTime) * 1000);
+      setTimeout(() => {
+        try { vco.port.postMessage({ type: 'stop' }); } catch {}
+        try { vco.disconnect(); } catch {}
+      }, stopAt);
+    }
     return endTime;
   }
 
   /** How long this operator's release lasts, for voice teardown scheduling. */
   releaseTime(): number {
     return releaseDuration(this.params.env, this.semitone);
+  }
+
+  /** Stock band-limited oscillator — the `fm` role, and the `vco` fallback. */
+  private _startOscillator(t: number) {
+    const p = this.params;
+    this.osc = this.ctx.createOscillator();
+    this.osc.frequency.value = this.freqHz;
+
+    if (p.wave === 'wavetable' && this.periodicWave) {
+      this.osc.setPeriodicWave(this.periodicWave);
+    } else {
+      this.osc.type = (p.wave === 'wavetable' ? 'sine' : p.wave) as OscillatorType;
+    }
+
+    this.osc.connect(this.envGain);
+    this.osc.start(t);
+  }
+
+  /**
+   * Worklet oscillator — PolyBLEP shapes with pulse-width modulation, hard sync
+   * and a free-running start phase, none of which OscillatorNode can do.
+   */
+  private _startVco() {
+    const p = this.params;
+    this.vco = new AudioWorkletNode(this.ctx, ANALOG_OSC_PROCESSOR, {
+      numberOfInputs: 1,
+      numberOfOutputs: 1,
+      outputChannelCount: [1],
+    });
+    this.vco.parameters.get('frequency')!.value = this.freqHz;
+    this.vco.parameters.get('pulseWidth')!.value = p.pulseWidth;
+    this.vco.parameters.get('shape')!.value = OSC_SHAPE_INDEX[p.wave] ?? 0;
+    this.vco.parameters.get('drift')!.value = p.drift;
+    this.vco.connect(this.envGain);
+  }
+
+  /** Looping noise buffer. Two seconds is long enough that the loop is inaudible. */
+  private _startNoise(t: number) {
+    const len = Math.floor(this.ctx.sampleRate * 2);
+    const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+    const data = buf.getChannelData(0);
+
+    if (this.params.noiseType === 'pink') {
+      const gen = new NoiseGen();
+      for (let i = 0; i < len; i++) data[i] = gen.pink();
+    } else {
+      for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+    }
+
+    this.noise = this.ctx.createBufferSource();
+    this.noise.buffer = buf;
+    this.noise.loop = true;
+    this.noise.connect(this.envGain);
+    this.noise.start(t);
+  }
+
+  /** The worklet's sync input, when this operator is a hard-sync target. */
+  getSyncInput(): AudioNode | null {
+    return this.vco;
   }
 
   private _startKS(hz: number, velocity: number, t: number) {
@@ -232,13 +323,27 @@ export class Operator {
    * synth did AM for its entire life. Callers must handle null.
    */
   getFrequencyParam(): AudioParam | null {
-    return this.osc?.frequency ?? null;
+    if (this.osc) return this.osc.frequency;
+    // Worklet AudioParams behave exactly like an oscillator's, which is why FM
+    // routing, pitch modulation and self-feedback all work unchanged for VCOs.
+    if (this.vco) return this.vco.parameters.get('frequency') ?? null;
+    return null;
+  }
+
+  /** Pulse width, for PWM modulation. Only VCO operators have one. */
+  getPulseWidthParam(): AudioParam | null {
+    return this.vco?.parameters.get('pulseWidth') ?? null;
   }
 
   getEnvParam(): AudioParam { return this.envGain.gain; }
 
   dispose() {
     this.noteOff(this.ctx.currentTime, true);
+    if (this.vco) {
+      try { this.vco.port.postMessage({ type: 'stop' }); } catch {}
+      try { this.vco.disconnect(); } catch {}
+      this.vco = null;
+    }
     try { this.envGain.disconnect(); } catch {}
     try { this.unitOut.disconnect(); } catch {}
     try { this.feedbackGain.disconnect(); } catch {}

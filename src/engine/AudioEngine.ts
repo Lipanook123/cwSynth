@@ -3,6 +3,7 @@ import { FxChain } from '../fx/FxChain';
 import { type PatchParams, DEFAULT_PATCH } from './Types';
 import { Arpeggiator } from './Arpeggiator';
 import { Lfo } from './Lfo';
+import { loadWorklets, workletsReady } from './worklets';
 import { logger } from '../debug/Logger';
 
 const BASE_HZ = 440; // A4
@@ -52,6 +53,8 @@ export class AudioEngine {
     if (this.ctx) return;
     this.ctx = new AudioContext();
     logger.info(`AudioContext created, state=${this.ctx.state}, sampleRate=${this.ctx.sampleRate}`);
+    // Start loading immediately; consumers fall back until this resolves.
+    void loadWorklets(this.ctx);
 
     this.masterGain = this.ctx.createGain();
     this.masterGain.gain.value = this.patch.volume;
@@ -81,6 +84,22 @@ export class AudioEngine {
     }
   }
 
+  /**
+   * Create the AudioContext and start loading worklets, without waiting for a
+   * user gesture.
+   *
+   * A new AudioContext begins life *suspended*, which browsers allow — only
+   * producing sound needs a gesture. Doing this early matters because
+   * `addModule` is async while `noteOn` is not: if the first note arrives before
+   * the module lands, it silently uses the fallback nodes and sounds wrong.
+   * Call this from a mount effect so the worklets are ready long before anyone
+   * touches a key.
+   */
+  preload(): Promise<boolean> {
+    this._init();
+    return this.ctx ? loadWorklets(this.ctx) : Promise.resolve(false);
+  }
+
   resume() {
     this._init();
     if (this.ctx?.state === 'suspended') {
@@ -88,6 +107,9 @@ export class AudioEngine {
       this.ctx.resume().then(() => logger.info('AudioContext resumed'));
     }
   }
+
+  /** True once the worklet processors are registered; false means fallback nodes. */
+  hasWorklets(): boolean { return workletsReady(this.ctx); }
 
   noteOn(semitone: number, velocity = 0.8) {
     this.resume();
