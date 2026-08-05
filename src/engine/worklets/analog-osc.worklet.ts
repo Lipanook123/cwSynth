@@ -3,10 +3,8 @@
 // Input 0 is the hard-sync input: whatever is connected there is watched for a
 // rising zero-crossing, and the oscillator restarts its cycle when one arrives.
 
-import { AnalogOsc, type OscShape } from '../dsp/AnalogOsc';
+import { AnalogOsc } from '../dsp/AnalogOsc';
 import { Retirement } from './retire';
-
-const SHAPES: OscShape[] = ['sawtooth', 'pulse', 'triangle', 'sine'];
 
 class AnalogOscProcessor extends AudioWorkletProcessor {
   private osc = new AnalogOsc(sampleRate, true);
@@ -48,17 +46,27 @@ class AnalogOscProcessor extends AudioWorkletProcessor {
 
     const freq = params.frequency;
     const pw = params.pulseWidth;
-    const shape = SHAPES[Math.round(params.shape[0])] ?? 'sawtooth';
+    // The DSP switches on this integer directly. It used to be turned into a
+    // shape *name* here and matched as a string once per sample.
+    const shape = Math.round(params.shape[0]);
     const drift = params.drift[0];
 
     const syncIn = inputs[0]?.[0];
 
+    // An a-rate param arrives as 128 values, a k-rate one as a single value.
+    // Deciding which per sample is a branch inside the hot loop for something
+    // that cannot change within a block.
+    const freqIsBlock = freq.length > 1;
+    const pwIsBlock = pw.length > 1;
+    const freq0 = freq[0];
+    const pw0 = pw[0];
+
     for (let i = 0; i < out.length; i++) {
       if (syncIn) this.osc.processSync(syncIn[i]);
       out[i] = this.osc.process(
-        freq.length > 1 ? freq[i] : freq[0],
+        freqIsBlock ? freq[i] : freq0,
         shape,
-        pw.length > 1 ? pw[i] : pw[0],
+        pwIsBlock ? pw[i] : pw0,
         drift,
       );
     }

@@ -4,7 +4,7 @@ import { ANALOG_OSC_PROCESSOR, workletsReady } from './worklets';
 import { NoiseGen } from './dsp/AnalogOsc';
 
 /** Shape indices as ordered in analog-osc.worklet.ts. */
-const OSC_SHAPE_INDEX: Record<string, number> = {
+export const OSC_SHAPE_INDEX: Record<string, number> = {
   sawtooth: 0, pulse: 1, square: 1, triangle: 2, sine: 3,
 };
 
