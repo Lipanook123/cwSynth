@@ -8,6 +8,39 @@ const OSC_SHAPE_INDEX: Record<string, number> = {
   sawtooth: 0, pulse: 1, square: 1, triangle: 2, sine: 3,
 };
 
+/** Seconds of noise per buffer — long enough that the loop point is inaudible. */
+const NOISE_SECONDS = 2;
+
+/**
+ * Noise buffers, shared across every voice in a context.
+ *
+ * Filling one is ~96,000 random numbers and a 384 KB allocation. Doing that per
+ * operator per note put a patch with two noise operators at roughly ten
+ * milliseconds of blocking work on every key-down, plus megabytes a second of
+ * garbage under an arpeggiator. The contents are noise, so there is nothing to
+ * gain by making them per-voice.
+ */
+const noiseCache = new WeakMap<BaseAudioContext, Partial<Record<'white' | 'pink', AudioBuffer>>>();
+
+function noiseBuffer(ctx: AudioContext, type: 'white' | 'pink'): AudioBuffer {
+  let byType = noiseCache.get(ctx);
+  if (!byType) { byType = {}; noiseCache.set(ctx, byType); }
+  const cached = byType[type];
+  if (cached) return cached;
+
+  const len = Math.floor(ctx.sampleRate * NOISE_SECONDS);
+  const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+  const data = buf.getChannelData(0);
+  if (type === 'pink') {
+    const gen = new NoiseGen();
+    for (let i = 0; i < len; i++) data[i] = gen.pink();
+  } else {
+    for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+  }
+  byType[type] = buf;
+  return buf;
+}
+
 /**
  * Modulation index at operator level 1.0. The DX-7 tops out around 12; 10 keeps
  * a little headroom while still reaching the screaming end of the range.
@@ -298,22 +331,16 @@ export class Operator {
 
   /** Looping noise buffer. Two seconds is long enough that the loop is inaudible. */
   private _startNoise(t: number) {
-    const len = Math.floor(this.ctx.sampleRate * 2);
-    const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
-    const data = buf.getChannelData(0);
-
-    if (this.params.noiseType === 'pink') {
-      const gen = new NoiseGen();
-      for (let i = 0; i < len; i++) data[i] = gen.pink();
-    } else {
-      for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
-    }
+    const buf = noiseBuffer(this.ctx, this.params.noiseType);
 
     this.noise = this.ctx.createBufferSource();
     this.noise.buffer = buf;
     this.noise.loop = true;
     this.noise.connect(this.envGain);
-    this.noise.start(t);
+    // Every voice shares one buffer, so start each at a random offset — playing
+    // them all from sample 0 would make stacked noise operators correlate and
+    // sound like one louder source instead of several.
+    this.noise.start(t, Math.random() * buf.duration);
   }
 
   /** The worklet's sync input, when this operator is a hard-sync target. */
