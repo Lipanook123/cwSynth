@@ -345,6 +345,11 @@ export class Voice {
     // Let the LFOs ride the release tail rather than stopping dead on key-up.
     this.lfoA.stop(end);
     this.lfoB.stop(end);
+
+    // The filter's own deadline. Teardown does not come round until half a
+    // second after the release, and a filter left rendering across that gap is
+    // most of the DSP an arpeggiated patch pays for.
+    this.filter.stop(end + 0.05);
   }
 
   /**
@@ -368,6 +373,7 @@ export class Voice {
     this._endTime = time + fadeTime;
     this.lfoA.stop(time + fadeTime);
     this.lfoB.stop(time + fadeTime);
+    this.filter.stop(time + fadeTime + 0.02);
   }
 
   connectOperatorOutputsTo(targets: GainNode[]): void {

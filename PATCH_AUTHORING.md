@@ -251,6 +251,11 @@ Destinations: `pitch`, `amp`, `filter_cutoff`, `filter_res`, `opN_level`,
 Always include `swing`. Omitting it used to crash note-on; the loader now
 defaults it, but writing it keeps the file explicit.
 
+`sine` and `triangle` run on an oscillator, so they cost nothing to start and
+last as long as the note. `square`, `sawtooth` and `random` are scheduled as
+automation events, capped at 1000 per note-on — at least 16 seconds of motion
+even at 20 Hz, then they hold. Reach for the first two on sustaining patches.
+
 ---
 
 ## Voice allocation

@@ -243,7 +243,58 @@ const results = await page.evaluate(async () => {
     rec('glide ramps pitch into place', false, String(e));
   }
 
-  // 9. Every factory preset renders audibly and without NaN.
+  // 9. Every LFO shape actually modulates, at the rate the patch asks for.
+  //
+  //    Sine and triangle are drawn by an OscillatorNode reading a cached
+  //    PeriodicWave rather than by automation events, so "does the shape still
+  //    come out right" is a question about a DFT, not about wiring — which is
+  //    exactly the kind of thing the mocked-graph tests cannot answer.
+  for (const [shape, swing] of [['sine', 0], ['sine', 0.15], ['triangle', 0], ['triangle', 0.5],
+                                ['square', 0], ['sawtooth', 0]]) {
+    try {
+      const rate = 6;
+      const patch = normalisePatch({
+        algorithm: 16,
+        operators: ops([{ enabled: true, role: 'fm', wave: 'sine', level: 0.9,
+          env: { stages: [{ time: 0.001, level: 1, curve: 'lin' }], sustainStage: 0,
+                 release: [{ time: 0.05, level: 0, curve: 'lin' }],
+                 velSens: 0, keyRateScale: 0, keyLevelScale: 0 } }]),
+        filter: { enabled: false },
+        lfo1: { shape, rate, depth: 1, delay: 0, sync: false, swing },
+        modMatrix: [{ source: 'lfo1', dest: 'amp', amount: 1, enabled: true }],
+      });
+      // Held for the whole render: a release tail would drag the envelope to
+      // zero and swamp the LFO's own swing in every measurement below.
+      const b = await render(patch, 1.0, 69, 440, 99);
+
+      // Envelope of the signal, sampled several times per LFO cycle, tells us
+      // how much the amp actually moved and how often.
+      const win = Math.round(SR / (rate * 12));
+      const env = [];
+      for (let i = Math.round(SR * 0.1); i + win < b.length; i += win) {
+        env.push(rms(b.subarray(i, i + win)));
+      }
+      const lo = Math.min(...env), hi = Math.max(...env);
+      const depth = (hi - lo) / (hi || 1);
+
+      // Rate from upward crossings of the envelope's midpoint. Counting local
+      // maxima instead over-reports: a sawtooth's ramp is full of them, and a
+      // square's plateau is flat enough that ripple registers as several.
+      const mid = lo + (hi - lo) * 0.5;
+      let crossings = 0;
+      for (let i = 1; i < env.length; i++) {
+        if (env[i - 1] <= mid && env[i] > mid) crossings++;
+      }
+      const measured = crossings / ((env.length * win) / SR);
+      rec(`lfo ${shape} swing=${swing} modulates at its rate`,
+          depth > 0.25 && Math.abs(measured - rate) < rate * 0.35,
+          `depth=${(depth * 100).toFixed(0)}%  rate≈${measured.toFixed(1)}Hz (want ${rate})`);
+    } catch (e) {
+      rec(`lfo ${shape} swing=${swing} modulates at its rate`, false, String(e));
+    }
+  }
+
+  // 10. Every factory preset renders audibly and without NaN.
   for (const preset of FACTORY_PRESETS) {
     if (preset.id === 'init') continue; // Init is deliberately plain
     try {

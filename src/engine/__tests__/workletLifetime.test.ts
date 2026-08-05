@@ -16,7 +16,7 @@ beforeAll(async () => {
 afterAll(() => restore?.());
 
 /**
- * Count AudioWorkletNode construction against `{type:'stop'}` messages.
+ * Track which AudioWorkletNodes were told to retire and which were not.
  *
  * An AudioWorkletProcessor whose process() returns true is never collected,
  * even after its node is disconnected — it keeps running for the life of the
@@ -26,22 +26,33 @@ afterAll(() => restore?.());
  * playing on any analog patch went silent within about a minute.
  */
 function trackWorklets() {
-  const stats = { created: 0, stopped: 0 };
+  // Counted per node, not per message: a node may legitimately be told to stop
+  // more than once — the filter gets a deadline when its voice releases and
+  // another when the voice is disposed — and comparing message totals would let
+  // one node stopped twice cover for another never stopped at all.
+  const created = new Set<object>();
+  const stopped = new Set<object>();
   const g = globalThis as Record<string, unknown>;
   const Base = g.AudioWorkletNode as typeof FakeAudioWorkletNode;
 
   class Tracked extends Base {
     constructor(ctx: unknown, name: string) {
       super(ctx, name);
-      stats.created++;
+      created.add(this);
       const inner = this.port.postMessage;
+      // Arrow function: `this` is the node, which is what gets recorded.
       this.port.postMessage = (msg: { type?: string }) => {
-        if (msg?.type === 'stop') stats.stopped++;
+        if (msg?.type === 'stop') stopped.add(this);
         return inner.call(this.port, msg);
       };
     }
   }
   g.AudioWorkletNode = Tracked;
+  const stats = {
+    get created() { return created.size; },
+    get stopped() { return stopped.size; },
+    get leaked() { return [...created].filter(n => !stopped.has(n)).length; },
+  };
   return { stats, restore: () => { g.AudioWorkletNode = Base; } };
 }
 
@@ -83,7 +94,7 @@ describe('worklet lifetime', () => {
       expect(stats.created).toBeGreaterThan(0);
       // The leak showed up as a fixed shortfall: 3 oscillators stopped per
       // voice but the 4th node, the filter, never was.
-      expect(stats.stopped).toBe(stats.created);
+      expect(stats.leaked).toBe(0);
     } finally { undo(); }
   });
 
@@ -99,7 +110,7 @@ describe('worklet lifetime', () => {
         filter: { enabled: true, model: 'ladder', cutoff: 900, resonance: 20 },
       }), 25);
       expect(stats.created).toBeGreaterThan(0);
-      expect(stats.stopped).toBe(stats.created);
+      expect(stats.leaked).toBe(0);
     } finally { undo(); }
   });
 

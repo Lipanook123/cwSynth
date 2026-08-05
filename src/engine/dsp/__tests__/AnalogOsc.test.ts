@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { AnalogOsc, NoiseGen, type OscShape } from '../AnalogOsc';
+import { AnalogOsc, NoiseGen, SHAPE_INDEX, type OscShape } from '../AnalogOsc';
 
 const SR = 48000;
 
@@ -7,7 +7,8 @@ function render(
   osc: AnalogOsc, freq: number, shape: OscShape, n: number, pw = 0.5, drift = 0,
 ): Float32Array {
   const buf = new Float32Array(n);
-  for (let i = 0; i < n; i++) buf[i] = osc.process(freq, shape, pw, drift);
+  const idx = SHAPE_INDEX[shape];
+  for (let i = 0; i < n; i++) buf[i] = osc.process(freq, idx, pw, drift);
   return buf;
 }
 
@@ -138,14 +139,14 @@ describe('AnalogOsc', () => {
   });
 
   it('starts at a random phase by default', () => {
-    const first = Array.from({ length: 12 }, () => new AnalogOsc(SR).process(440, 'sawtooth'));
+    const first = Array.from({ length: 12 }, () => new AnalogOsc(SR).process(440, SHAPE_INDEX.sawtooth));
     // Phase-coherent oscillators would all emit the same first sample.
     expect(new Set(first.map(v => v.toFixed(4))).size).toBeGreaterThan(1);
   });
 
   it('starts deterministically when random phase is off', () => {
-    const a = new AnalogOsc(SR, false).process(440, 'sawtooth');
-    const b = new AnalogOsc(SR, false).process(440, 'sawtooth');
+    const a = new AnalogOsc(SR, false).process(440, SHAPE_INDEX.sawtooth);
+    const b = new AnalogOsc(SR, false).process(440, SHAPE_INDEX.sawtooth);
     expect(a).toBeCloseTo(b, 10);
   });
 
@@ -164,6 +165,49 @@ describe('AnalogOsc', () => {
     for (const v of buf) expect(Number.isFinite(v)).toBe(true);
   });
 
+  it('maps each shape index to the waveform it names', () => {
+    // The worklet passes a number, so the index-to-waveform mapping is the
+    // shipping path. Comparing indexed output against named output proves
+    // nothing — both resolve through the same table, so they agree even when
+    // that table is wrong. Each index is pinned to a property only its own
+    // waveform has.
+    const f0 = 440;
+    const at = (idx: number, pw = 0.5) => {
+      const osc = new AnalogOsc(SR, false);
+      const buf = new Float32Array(SR);
+      for (let i = 0; i < buf.length; i++) buf[i] = osc.process(f0, idx, pw, 0);
+      return buf;
+    };
+
+    // Harmonic content separates saw from triangle from sine: a saw's second
+    // harmonic is half its fundamental, a triangle's is near nothing, and a
+    // sine has none at all.
+    const ratio2nd = (b: Float32Array) => magnitudeAt(b, f0 * 2) / magnitudeAt(b, f0);
+    expect(ratio2nd(at(SHAPE_INDEX.sawtooth))).toBeGreaterThan(0.3);
+    expect(ratio2nd(at(SHAPE_INDEX.triangle))).toBeLessThan(0.05);
+    expect(ratio2nd(at(SHAPE_INDEX.sine))).toBeLessThan(0.01);
+    // Triangle is not sine: it has a third harmonic, a sine does not.
+    const ratio3rd = (b: Float32Array) => magnitudeAt(b, f0 * 3) / magnitudeAt(b, f0);
+    expect(ratio3rd(at(SHAPE_INDEX.triangle))).toBeGreaterThan(0.05);
+    expect(ratio3rd(at(SHAPE_INDEX.sine))).toBeLessThan(0.01);
+    // Only the pulse tracks pulseWidth.
+    const duty = (b: Float32Array) => b.reduce((n, v) => n + (v > 0 ? 1 : 0), 0) / b.length;
+    expect(duty(at(SHAPE_INDEX.pulse, 0.25))).toBeCloseTo(0.25, 1);
+    expect(duty(at(SHAPE_INDEX.pulse, 0.75))).toBeCloseTo(0.75, 1);
+  });
+
+  it('agrees with the shape indices the Operator sends', async () => {
+    // Two tables, in different files, that must say the same thing: the engine
+    // writes the worklet's `shape` param from its own, and the DSP reads it
+    // with this one. Nothing else would notice them drifting apart.
+    const { OSC_SHAPE_INDEX } = await import('../../Operator');
+    for (const [name, idx] of Object.entries(SHAPE_INDEX)) {
+      expect(OSC_SHAPE_INDEX[name], name).toBe(idx);
+    }
+    // 'square' is the patch schema's name for a 50% pulse.
+    expect(OSC_SHAPE_INDEX.square).toBe(SHAPE_INDEX.pulse);
+  });
+
   it('drift detunes the oscillator without destabilising it', () => {
     const buf = render(new AnalogOsc(SR, false), 440, 'sawtooth', SR, 0.5, 1);
     for (const v of buf) expect(Number.isFinite(v)).toBe(true);
@@ -176,13 +220,13 @@ describe('AnalogOsc', () => {
 describe('AnalogOsc hard sync', () => {
   it('resets phase on a rising zero-crossing', () => {
     const osc = new AnalogOsc(SR, false);
-    for (let i = 0; i < 100; i++) osc.process(440, 'sawtooth');
-    const beforeReset = osc.process(440, 'sawtooth');
+    for (let i = 0; i < 100; i++) osc.process(440, SHAPE_INDEX.sawtooth);
+    const beforeReset = osc.process(440, SHAPE_INDEX.sawtooth);
     expect(beforeReset).toBeGreaterThan(-0.9); // well into the ramp
 
     expect(osc.processSync(-1)).toBe(false);
     expect(osc.processSync(1)).toBe(true);     // rising edge
-    const afterReset = osc.process(440, 'sawtooth');
+    const afterReset = osc.process(440, SHAPE_INDEX.sawtooth);
     expect(afterReset).toBeLessThan(-0.9);     // back to the start of the ramp
   });
 
@@ -203,9 +247,9 @@ describe('AnalogOsc hard sync', () => {
     const masterFreq = 220;
     const buf = new Float32Array(SR);
     for (let i = 0; i < buf.length; i++) {
-      const m = master.process(masterFreq, 'sawtooth');
+      const m = master.process(masterFreq, SHAPE_INDEX.sawtooth);
       slave.processSync(m > 0 ? 1 : -1);
-      buf[i] = slave.process(masterFreq * 2.7, 'sawtooth');
+      buf[i] = slave.process(masterFreq * 2.7, SHAPE_INDEX.sawtooth);
     }
     for (const v of buf) expect(Number.isFinite(v)).toBe(true);
     expect(magnitudeAt(buf, masterFreq)).toBeGreaterThan(0);

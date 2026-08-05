@@ -106,9 +106,16 @@ export class FakeAudioContext {
   createWaveShaper() { return new FakeWaveShaper(); }
   createAnalyser() { return new FakeAnalyser(); }
   createPeriodicWave() { return {}; }
-  createBuffer(channels: number, len: number) {
+  createBuffer(channels: number, len: number, rate?: number) {
     const data = Array.from({ length: channels }, () => new Float32Array(len));
-    return { length: len, numberOfChannels: channels, getChannelData: (i: number) => data[i] };
+    const sr = rate ?? this.sampleRate;
+    return {
+      length: len,
+      numberOfChannels: channels,
+      sampleRate: sr,
+      duration: len / sr,
+      getChannelData: (i: number) => data[i],
+    };
   }
   resume() { this.state = 'running'; return Promise.resolve(); }
   close() { this.state = 'closed'; return Promise.resolve(); }
