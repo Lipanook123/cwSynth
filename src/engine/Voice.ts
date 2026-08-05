@@ -41,8 +41,17 @@ export class Voice {
 
   /** Gain stages built at noteOn — amplitude for carriers, FM index for modulators. */
   private routeGains: GainNode[] = [];
-  /** Outgoing route gains per source operator, so opN_level can modulate them. */
-  private gainsBySource: GainNode[][] = Array.from({ length: 6 }, () => []);
+  /**
+   * Outgoing route gains per source operator, so opN_level can modulate them.
+   *
+   * The nominal value is stored rather than read back from the AudioParam:
+   * `setValueAtTime` schedules a value but leaves `.value` reporting the node's
+   * default until the scheduler runs, so reading it here returned 1.0 and made
+   * opN_level modulation depth wrong by a factor of 1/level — 13x too much on a
+   * quiet operator.
+   */
+  private gainsBySource: { gain: GainNode; nominal: number }[][] =
+    Array.from({ length: 6 }, () => []);
   private opts: VoiceOptions;
   private velocity = 1;
   private _noteOffTime = 0;
@@ -126,12 +135,13 @@ export class Voice {
 
       if (route.to === 'out') {
         // Carrier: level is amplitude.
+        const nominal = srcParams.level * route.amount;
         const g = this.ctx.createGain();
-        g.gain.setValueAtTime(srcParams.level * route.amount, time);
+        g.gain.setValueAtTime(nominal, time);
         src.unitOut.connect(g);
         g.connect(this.carrierMix);
         this.routeGains.push(g);
-        this.gainsBySource[route.from].push(g);
+        this.gainsBySource[route.from].push({ gain: g, nominal });
         continue;
       }
 
@@ -172,7 +182,7 @@ export class Voice {
       src.unitOut.connect(g);
       g.connect(freqParam);
       this.routeGains.push(g);
-      this.gainsBySource[route.from].push(g);
+      this.gainsBySource[route.from].push({ gain: g, nominal: depthHz });
     }
   }
 
@@ -276,7 +286,7 @@ export class Voice {
       // Modulate every outgoing stage of that operator, proportional to its
       // nominal value so the depth means the same thing for carriers and
       // modulators alike.
-      return this.gainsBySource[idx].map(g => ({ param: g.gain, scale: amount * g.gain.value }));
+      return this.gainsBySource[idx].map(r => ({ param: r.gain.gain, scale: amount * r.nominal }));
     }
 
     const opRat = dest.match(/^op(\d)_ratio$/);
@@ -332,8 +342,9 @@ export class Voice {
     this._noteOffTime = time;
     this._endTime = end;
 
-    this.lfoA.stop();
-    this.lfoB.stop();
+    // Let the LFOs ride the release tail rather than stopping dead on key-up.
+    this.lfoA.stop(end);
+    this.lfoB.stop(end);
   }
 
   /**
@@ -355,8 +366,8 @@ export class Voice {
     g.linearRampToValueAtTime(0, time + fadeTime);
     this._noteOffTime = time;
     this._endTime = time + fadeTime;
-    this.lfoA.stop();
-    this.lfoB.stop();
+    this.lfoA.stop(time + fadeTime);
+    this.lfoB.stop(time + fadeTime);
   }
 
   connectOperatorOutputsTo(targets: GainNode[]): void {

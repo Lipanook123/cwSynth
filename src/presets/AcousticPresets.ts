@@ -44,19 +44,21 @@ const TIN_WHISTLE: PatchParams = {
   operators: [
     // Fundamental. `vco` role for the free-running start phase and drift; a
     // stock oscillator always starts at phase 0 and sounds more static.
-    { ...DEFAULT_OPERATOR, role: 'vco', wave: 'sine', ratio: 1, level: 0.85, drift: 0.1,
+    { ...DEFAULT_OPERATOR, role: 'vco', wave: 'sine', ratio: 1, level: 0.85, drift: 0.35,
       env: adsrToEnv(0.035, 0.12, 0.94, 0.11, { velSens: 0.55 }) },
     // 2nd partial — body without reediness.
-    { ...DEFAULT_OPERATOR, role: 'vco', wave: 'sine', ratio: 2, level: 0.2, drift: 0.1,
+    { ...DEFAULT_OPERATOR, role: 'vco', wave: 'sine', ratio: 2, fine: 3, level: 0.2, drift: 0.4,
       env: adsrToEnv(0.045, 0.15, 0.9, 0.09, { velSens: 0.7 }) },
     // 3rd partial — a touch of edge, and the first thing to grow when blown hard.
-    { ...DEFAULT_OPERATOR, role: 'vco', wave: 'sine', ratio: 3, level: 0.075, drift: 0.1,
+    { ...DEFAULT_OPERATOR, role: 'vco', wave: 'sine', ratio: 3, fine: -4, level: 0.075, drift: 0.45,
       env: adsrToEnv(0.05, 0.18, 0.82, 0.08, { velSens: 0.8 }) },
-    // Sustained breath noise.
-    { ...DEFAULT_OPERATOR, role: 'noise', noiseType: 'white', level: 0.24,
-      env: adsrToEnv(0.05, 0.2, 0.85, 0.13, { velSens: 0.75 }) },
+    // Sustained breath noise. Level set by ear, not by theory: a first pass at
+    // 0.24 (-21 dB under the tone) was far too much — loud enough to corrupt a
+    // zero-crossing pitch measurement, which is a good sign it dominates.
+    { ...DEFAULT_OPERATOR, role: 'noise', noiseType: 'white', level: 0.095,
+      env: adsrToEnv(0.05, 0.2, 0.8, 0.13, { velSens: 0.75 }) },
     // Attack chiff: one-shot, so it fires once and gets out of the way.
-    { ...DEFAULT_OPERATOR, role: 'noise', noiseType: 'white', level: 0.19,
+    { ...DEFAULT_OPERATOR, role: 'noise', noiseType: 'white', level: 0.1,
       env: {
         stages: [
           { time: 0.004, level: 1, curve: 'lin' },
@@ -84,12 +86,29 @@ const TIN_WHISTLE: PatchParams = {
     keytrack: 0.85,
     env: adsrToEnv(0.018, 0.16, 0.55, 0.1, { velSens: 0.5 }),
   },
-  // Delayed vibrato — players do not start one on the note's attack.
-  lfo1: { shape: 'sine', rate: 5.2, depth: 0.5, delay: 0.35, sync: true, swing: 0 },
+  // Two LFOs at unrelated rates. A single sine LFO is the thing that reads as
+  // "synthesiser": perfectly periodic pitch and amplitude. Summing 5.0 Hz with
+  // 0.71 Hz gives a wobble that does not audibly repeat, and the VCOs' own
+  // random drift (0.35-0.45 here) adds smooth non-periodic wander on top.
+  lfo1: { shape: 'sine', rate: 5.0, depth: 0.5, delay: 0.4, sync: true, swing: 0.15 },
+  // Slow breath-pressure movement, running from the note's start.
+  lfo2: { shape: 'triangle', rate: 0.71, depth: 0.6, delay: 0, sync: false, swing: 0 },
   modMatrix: [
-    { source: 'lfo1', dest: 'pitch', amount: 0.5, enabled: true },
-    // Breath vibrato moves amplitude as well as pitch.
-    { source: 'lfo1', dest: 'amp', amount: 0.18, enabled: true },
+    // Vibrato proper — narrower than the first attempt, since drift now
+    // supplies the irregularity that the LFO was being asked to fake.
+    { source: 'lfo1', dest: 'pitch', amount: 0.32, enabled: true },
+    // Amplitude was measured at 0.6% variation across the sustain — effectively
+    // static, and the main reason it sounded mechanical. A wind instrument's
+    // loudness never sits still.
+    // 44% peak-to-peak measured on the first attempt, which is tremolo rather
+    // than breath. The slow LFO carries most of it; the vibrato-rate one only
+    // adds a touch, as it does on a real instrument.
+    { source: 'lfo1', dest: 'amp', amount: 0.12, enabled: true },
+    { source: 'lfo2', dest: 'amp', amount: 0.28, enabled: true },
+    { source: 'lfo2', dest: 'pitch', amount: 0.12, enabled: true },
+    // Upper partials fluctuate more than the fundamental on a real instrument,
+    // so let the harmonic balance breathe rather than holding a fixed spectrum.
+    { source: 'lfo2', dest: 'op3_level', amount: 0.5, enabled: true },
   ],
   fx: {
     ...DEFAULT_PATCH.fx,
