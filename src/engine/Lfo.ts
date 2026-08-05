@@ -135,15 +135,37 @@ export class Lfo {
     this.connections.push(g);
   }
 
-  stop() {
-    if (this.oscNode) {
-      logger.log('lfo stop');
-      try { this.oscNode.stop(); } catch {}
-      try { this.oscNode.disconnect(); } catch {}
-      this.oscNode = null;
-    }
-    this.connections.forEach(g => { try { g.disconnect(); } catch {} });
+  /**
+   * Stop the LFO, optionally at a scheduled time.
+   *
+   * Without a time this halts immediately, which cuts vibrato dead the instant
+   * a key is released rather than letting it ride the release tail. It also
+   * breaks any caller that schedules a note-off ahead of time — offline
+   * rendering in particular, where the whole note would come out unmodulated.
+   */
+  stop(time?: number) {
+    const node = this.oscNode;
+    const conns = this.connections;
+    this.oscNode = null;
     this.connections = [];
+
+    if (!node) {
+      conns.forEach(g => { try { g.disconnect(); } catch {} });
+      return;
+    }
+
+    const now = this.ctx.currentTime;
+    const at = time !== undefined && time > now ? time : now;
+    logger.log(`lfo stop at ${at.toFixed(3)}`);
+    try { node.stop(at); } catch {}
+
+    // Tear down only once the LFO has actually finished, or the disconnect
+    // would silence it early regardless of the scheduled stop.
+    const delayMs = (at - now) * 1000 + 50;
+    setTimeout(() => {
+      try { node.disconnect(); } catch {}
+      conns.forEach(g => { try { g.disconnect(); } catch {} });
+    }, Math.max(0, delayMs));
   }
 
   dispose() {

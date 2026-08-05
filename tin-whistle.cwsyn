@@ -51,7 +51,7 @@
       "karplusStrong": false,
       "ksDecay": 0.995,
       "pulseWidth": 0.5,
-      "drift": 0.1,
+      "drift": 0.35,
       "noiseType": "white"
     },
     {
@@ -60,7 +60,7 @@
       "wave": "sine",
       "wavetableData": null,
       "ratio": 2,
-      "fine": 0,
+      "fine": 3,
       "fixed": false,
       "fixedFreq": 440,
       "level": 0.2,
@@ -93,7 +93,7 @@
       "karplusStrong": false,
       "ksDecay": 0.995,
       "pulseWidth": 0.5,
-      "drift": 0.1,
+      "drift": 0.4,
       "noiseType": "white"
     },
     {
@@ -102,7 +102,7 @@
       "wave": "sine",
       "wavetableData": null,
       "ratio": 3,
-      "fine": 0,
+      "fine": -4,
       "fixed": false,
       "fixedFreq": 440,
       "level": 0.075,
@@ -135,7 +135,7 @@
       "karplusStrong": false,
       "ksDecay": 0.995,
       "pulseWidth": 0.5,
-      "drift": 0.1,
+      "drift": 0.45,
       "noiseType": "white"
     },
     {
@@ -147,7 +147,7 @@
       "fine": 0,
       "fixed": false,
       "fixedFreq": 440,
-      "level": 0.24,
+      "level": 0.095,
       "feedback": 0,
       "env": {
         "stages": [
@@ -158,7 +158,7 @@
           },
           {
             "time": 0.2,
-            "level": 0.85,
+            "level": 0.8,
             "curve": "exp"
           }
         ],
@@ -189,7 +189,7 @@
       "fine": 0,
       "fixed": false,
       "fixedFreq": 440,
-      "level": 0.19,
+      "level": 0.1,
       "feedback": 0,
       "env": {
         "stages": [
@@ -304,31 +304,49 @@
   },
   "lfo1": {
     "shape": "sine",
-    "rate": 5.2,
+    "rate": 5,
     "depth": 0.5,
-    "delay": 0.35,
+    "delay": 0.4,
     "sync": true,
-    "swing": 0
+    "swing": 0.15
   },
   "lfo2": {
-    "shape": "sine",
-    "rate": 0.3,
-    "depth": 0.3,
-    "delay": 0.2,
-    "sync": true,
+    "shape": "triangle",
+    "rate": 0.71,
+    "depth": 0.6,
+    "delay": 0,
+    "sync": false,
     "swing": 0
   },
   "modMatrix": [
     {
       "source": "lfo1",
       "dest": "pitch",
-      "amount": 0.5,
+      "amount": 0.32,
       "enabled": true
     },
     {
       "source": "lfo1",
       "dest": "amp",
-      "amount": 0.18,
+      "amount": 0.12,
+      "enabled": true
+    },
+    {
+      "source": "lfo2",
+      "dest": "amp",
+      "amount": 0.28,
+      "enabled": true
+    },
+    {
+      "source": "lfo2",
+      "dest": "pitch",
+      "amount": 0.12,
+      "enabled": true
+    },
+    {
+      "source": "lfo2",
+      "dest": "op3_level",
+      "amount": 0.5,
       "enabled": true
     }
   ],
