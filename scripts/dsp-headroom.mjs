@@ -13,12 +13,13 @@
 //   1. Does node count cost anything?  (native nodes, then worklet nodes)
 //   2. Where does our DSP arithmetic run out?  (ladder filters, packed many to
 //      a node so the count of nodes stays small and constant)
-//   3. Does the engine spend its budget on voices you can hear?  (a held chord
-//      against an arpeggio, comparing worklets alive to voices sounding)
+//   3. What does a hard-working patch actually spend its budget on?  (a held
+//      chord, then a brutal arpeggio with one ingredient removed at a time)
 //
-// Question 3 is the one that matters for design decisions. A held chord and an
-// arpeggio ask for similar arithmetic; if the arpeggio costs far more, the
-// engine is keeping dead voices running, and no amount of faster DSP fixes it.
+// Question 3 is the one that settles design arguments. If the arpeggio only
+// comes back to real time once our own DSP is swapped for native nodes, the
+// cost is arithmetic. If it comes back once voices stop overlapping, the cost
+// is concurrency. Those point at completely different fixes.
 
 import { chromium } from 'playwright';
 import { createServer } from 'vite';
@@ -114,15 +115,33 @@ const rows = await page.evaluate(async () => {
   // ---- what the engine does with its budget -----------------------------
   {
     const base = FACTORY_PRESETS.find(p => p.id === 'obxa-pad').patch;
-    const live = { n: 0 };
+    // Tracked per node, not as a running total: a node can be told to stop more
+    // than once (a deadline when its voice releases, another at teardown), so
+    // counting messages under-reports what is still alive — and goes negative.
+    const alive = new Map(); // name → Set of nodes not yet retired
     const Real = window.AudioWorkletNode;
     window.AudioWorkletNode = class extends Real {
       constructor(ctx, name, opts) {
         super(ctx, name, opts);
-        live.n++;
+        if (!alive.has(name)) alive.set(name, new Set());
+        alive.get(name).add(this);
         const post = this.port.postMessage.bind(this.port);
-        this.port.postMessage = (m) => { if (m?.type === 'stop') live.n--; return post(m); };
+        const self = this;
+        this.port.postMessage = (m) => {
+          if (m?.type === 'stop') alive.get(name).delete(self);
+          return post(m);
+        };
       }
+    };
+    const liveCounts = () => {
+      const parts = [];
+      let total = 0;
+      for (const [name, set] of alive) {
+        if (!set.size) continue;
+        parts.push(`${name.replace('cw-', '')} ${set.size}`);
+        total += set.size;
+      }
+      return { total, detail: parts.join(' + ') };
     };
 
     const engine = new AudioEngine();
@@ -138,29 +157,50 @@ const rows = await page.evaluate(async () => {
       engine.arp.enabled = false; engine.arp.stop(); engine.allNotesOff();
       await new Promise(r => setTimeout(r, 2500));
     };
-    const load = (unison) => engine.loadPatch({
+    const patchFor = (unison) => ({
       ...base, unison: { ...base.unison, voices: unison }, polyphony: 24,
     });
 
     for (const [unison, notes] of [[3, 4], [3, 8], [1, 8]]) {
-      await reset(); load(unison);
+      await reset(); engine.loadPatch(patchFor(unison));
       for (let i = 0; i < notes; i++) engine.noteOn(52 + i * 3, 0.8);
       await new Promise(r => setTimeout(r, 800));
-      const voices = engine.getVoiceCount(), worklets = live.n;
+      const voices = engine.getVoiceCount(), w = liveCounts();
       out.push({ group: 'engine — held', label: `${notes} notes x${unison} unison`,
-                 detail: `${worklets} worklets / ${voices} voices`, ratio: await clock(3000) });
+                 detail: `${w.total} worklets / ${voices} voices`, ratio: await clock(3000),
+                 note: w.detail });
     }
 
-    for (const unison of [3, 1]) {
-      await reset(); load(unison);
+    // A deliberately brutal arpeggio — 12 steps/s, 95% gate, 15-note sequence —
+    // then the same thing with one ingredient removed at a time. Whichever
+    // removal restores real time is the one paying for it.
+    const arp = async (label, patch) => {
+      await reset();
+      engine.loadPatch(patch);
       engine.arp.enabled = true;
       engine.arp.setRate(12); engine.arp.setGate(0.95); engine.arp.setOctaves(3);
       for (const n of [60, 63, 67, 70, 74]) engine.noteOn(n, 0.8);
       await new Promise(r => setTimeout(r, 2000));
-      const voices = engine.getVoiceCount(), worklets = live.n;
-      out.push({ group: 'engine — arp', label: `12 steps/s x${unison} unison`,
-                 detail: `${worklets} worklets / ${voices} voices`, ratio: await clock(4000) });
-    }
+      out.push({ group: 'engine — arp', label, detail: '', ratio: await clock(4000) });
+    };
+
+    await arp('x3 unison, as shipped', patchFor(3));
+    await arp('  minus our DSP (biquad + native osc)', {
+      ...patchFor(3),
+      filter: { ...base.filter, model: 'biquad' },
+      operators: base.operators.map(o => ({ ...o, role: o.role === 'vco' ? 'fm' : o.role })),
+    });
+    await arp('  minus the overlap (50 ms release)', {
+      ...patchFor(3),
+      operators: base.operators.map(o => ({
+        ...o, env: { ...o.env, release: [{ time: 0.05, level: 0, curve: 'exp' }] },
+      })),
+    });
+    await arp('  minus the unison (x1)', patchFor(1));
+    await arp('  minus per-sample drift (drift 0)', {
+      ...patchFor(3),
+      operators: base.operators.map(o => ({ ...o, drift: 0 })),
+    });
 
     await reset();
     window.AudioWorkletNode = Real;
@@ -173,7 +213,7 @@ let group = '';
 console.log(`${''.padEnd(34)} ${'detail'.padEnd(28)} clock`);
 for (const r of rows) {
   if (r.group !== group) { group = r.group; console.log(`\n${group}`); }
-  console.log(`  ${r.label.padEnd(32)} ${r.detail.padEnd(28)} ${r.ratio}`);
+  console.log(`  ${r.label.padEnd(32)} ${r.detail.padEnd(28)} ${r.ratio}${r.note ? `   (${r.note})` : ''}`);
 }
 console.log('\nclock 1.0 = audio thread rendering in real time; lower = falling behind.');
 

@@ -116,6 +116,19 @@ export class VoiceFilter {
     this.cutoffParam.setValueAtTime(hz, time);
   }
 
+  /**
+   * Tell the filter when the voice ends, so its processor can retire on the
+   * audio clock rather than waiting for the voice's teardown timer.
+   *
+   * `time` is a deadline, not a cut: the processor also retires itself as soon
+   * as it falls silent, which for an ordinary release is a good deal sooner. A
+   * resonant filter still ringing is not silent, so the deadline is what stops
+   * a self-oscillating one running forever.
+   */
+  stop(time: number) {
+    try { this.worklet?.port.postMessage({ type: 'stop', at: time }); } catch {}
+  }
+
   dispose() {
     try { this.input.disconnect(); } catch {}
     try { this.output.disconnect(); } catch {}

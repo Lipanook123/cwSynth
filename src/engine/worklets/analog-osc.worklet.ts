@@ -4,19 +4,20 @@
 // rising zero-crossing, and the oscillator restarts its cycle when one arrives.
 
 import { AnalogOsc, type OscShape } from '../dsp/AnalogOsc';
+import { Retirement } from './retire';
 
 const SHAPES: OscShape[] = ['sawtooth', 'pulse', 'triangle', 'sine'];
 
 class AnalogOscProcessor extends AudioWorkletProcessor {
   private osc = new AnalogOsc(sampleRate, true);
-  private dead = false;
+  private retire = new Retirement(sampleRate);
 
   constructor() {
     super();
     // The engine stops a voice by telling the processor to retire, so the node
     // can be garbage collected rather than running silently forever.
     this.port.onmessage = (e: MessageEvent) => {
-      if (e.data?.type === 'stop') this.dead = true;
+      this.retire.onMessage(e.data);
       if (e.data?.type === 'reset') this.osc.reset(e.data.randomPhase !== false);
     };
   }
@@ -37,7 +38,10 @@ class AnalogOscProcessor extends AudioWorkletProcessor {
     outputs: Float32Array[][],
     params: Record<string, Float32Array>,
   ): boolean {
-    if (this.dead) return false;
+    // Only the scheduled stop applies here: an oscillator is never silent while
+    // it is running, so there is nothing for a silence backstop to notice. Its
+    // amplitude envelope lives downstream, in the voice's gain stage.
+    if (this.retire.expired(currentTime)) return false;
 
     const out = outputs[0]?.[0];
     if (!out) return true;

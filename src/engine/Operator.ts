@@ -279,13 +279,17 @@ export class Operator {
     if (osc) { try { osc.stop(endTime + 0.05); } catch {} }
     if (noise) { try { noise.stop(endTime + 0.05); } catch {} }
     if (vco) {
-      // A worklet node has no stop(); tell the processor to retire so it can be
-      // collected instead of running silently for the life of the context.
-      const stopAt = Math.max(0, (endTime + 0.05 - this.ctx.currentTime) * 1000);
-      setTimeout(() => {
-        try { vco.port.postMessage({ type: 'stop' }); } catch {}
-        try { vco.disconnect(); } catch {}
-      }, stopAt);
+      // A worklet node has no stop(), so the processor is told when to retire.
+      // The deadline is an AudioContext timestamp rather than a setTimeout: the
+      // main thread is where the jank is, so a timer-driven stop lands late
+      // exactly when the audio thread can least afford to keep rendering a
+      // finished voice. The processor compares against its own clock instead.
+      try { vco.port.postMessage({ type: 'stop', at: endTime + 0.05 }); } catch {}
+      // Disconnecting has to happen here, and only once the processor is gone —
+      // pulling the node out of the graph early can stop process() being called
+      // at all, which is how a processor ends up never seeing its own deadline.
+      const disconnectIn = Math.max(0, (endTime + 0.1 - this.ctx.currentTime) * 1000);
+      setTimeout(() => { try { vco.disconnect(); } catch {} }, disconnectIn);
     }
     return endTime;
   }

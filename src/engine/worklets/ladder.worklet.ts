@@ -5,23 +5,18 @@
 
 import { LadderFilter, type FilterMode } from '../dsp/LadderFilter';
 import { StateVariableFilter } from '../dsp/StateVariableFilter';
+import { Retirement } from './retire';
 
 const MODES: FilterMode[] = ['lp', 'hp', 'bp', 'notch'];
 
 class LadderFilterProcessor extends AudioWorkletProcessor {
   private ladder: LadderFilter[] = [];
   private svf: StateVariableFilter[] = [];
-  private dead = false;
+  private retire = new Retirement(sampleRate);
 
   constructor() {
     super();
-    // A processor whose process() always returns true is never collected, even
-    // once its node is disconnected — it keeps running for the life of the
-    // AudioContext. With one filter per voice that leaks a processor per note,
-    // which starves the audio thread within a minute of arpeggiated playing.
-    this.port.onmessage = (e: MessageEvent) => {
-      if (e.data?.type === 'stop') this.dead = true;
-    };
+    this.port.onmessage = (e: MessageEvent) => this.retire.onMessage(e.data);
   }
 
   static get parameterDescriptors() {
@@ -44,7 +39,7 @@ class LadderFilterProcessor extends AudioWorkletProcessor {
     outputs: Float32Array[][],
     params: Record<string, Float32Array>,
   ): boolean {
-    if (this.dead) return false;
+    if (this.retire.expired(currentTime)) return false;
 
     const input = inputs[0];
     const output = outputs[0];
@@ -79,7 +74,12 @@ class LadderFilterProcessor extends AudioWorkletProcessor {
           : ladder.process(x, fc, q, drive, slope, mode);
       }
     }
-    return true;
+
+    // Retiring on silence rather than only on schedule is what keeps a voice's
+    // filter from rendering through the half second between the end of its
+    // release and its teardown timer. A resonant filter still ringing is not
+    // silent, so a ring-out is never cut short by this.
+    return !this.retire.observe(output[0]);
   }
 }
 
