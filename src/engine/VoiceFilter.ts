@@ -122,6 +122,9 @@ export class VoiceFilter {
     try { this.hpf?.disconnect(); } catch {}
     try { this.biquad?.disconnect(); } catch {}
     if (this.worklet) {
+      // Disconnecting is not enough: the processor keeps running until it is
+      // told to retire, so it must be stopped explicitly or it leaks per voice.
+      try { this.worklet.port.postMessage({ type: 'stop' }); } catch {}
       try { this.worklet.disconnect(); } catch {}
       this.worklet = null;
     }

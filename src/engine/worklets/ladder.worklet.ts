@@ -11,6 +11,18 @@ const MODES: FilterMode[] = ['lp', 'hp', 'bp', 'notch'];
 class LadderFilterProcessor extends AudioWorkletProcessor {
   private ladder: LadderFilter[] = [];
   private svf: StateVariableFilter[] = [];
+  private dead = false;
+
+  constructor() {
+    super();
+    // A processor whose process() always returns true is never collected, even
+    // once its node is disconnected — it keeps running for the life of the
+    // AudioContext. With one filter per voice that leaks a processor per note,
+    // which starves the audio thread within a minute of arpeggiated playing.
+    this.port.onmessage = (e: MessageEvent) => {
+      if (e.data?.type === 'stop') this.dead = true;
+    };
+  }
 
   static get parameterDescriptors() {
     return [
@@ -32,6 +44,8 @@ class LadderFilterProcessor extends AudioWorkletProcessor {
     outputs: Float32Array[][],
     params: Record<string, Float32Array>,
   ): boolean {
+    if (this.dead) return false;
+
     const input = inputs[0];
     const output = outputs[0];
     if (!output || output.length === 0) return true;
